@@ -16,7 +16,21 @@ android {
         versionCode = 1
         versionName = "1.0"
     }
+    // Stable debug key, committed on purpose so every CI build is signed with the
+    // same certificate and new APKs install straight over the old one.
+    signingConfigs {
+        create("stable") {
+            storeFile = rootProject.file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "reelvault"
+            keyPassword = "android"
+            storeType = "PKCS12"
+        }
+    }
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("stable")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
