@@ -30,3 +30,8 @@ Originals are only ever read — never modified or deleted.
 - Permission: READ_MEDIA_VIDEO (Android 13+) / READ_EXTERNAL_STORAGE (≤12). Extra folders use the system picker.
 - Haze is pinned to 1.0.2. If a future version changes `hazeChild`/`HazeStyle`, adjust `Glass.kt` only.
 - Package: `com.reelvault.app`, minSdk 26, target/compile SDK 35.
+
+## Logo
+Original ReelVault mark: a vault-dial ring (gap + pink indicator dot) around a "V" that is also a play
+button turned downward, with a small play cut-out inside. Files: `res/drawable/ic_launcher_foreground.xml`,
+`res/drawable/ic_logo_mark.xml` (used in the app header). The adaptive icon also has a monochrome layer.

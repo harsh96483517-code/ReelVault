@@ -9,9 +9,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -27,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -130,23 +133,30 @@ private fun TopHeader(showSearch: Boolean, searchOn: Boolean, onSearch: () -> Un
 @Composable
 private fun BottomBar(selected: Int, onSelect: (Int) -> Unit, modifier: Modifier) {
     val onSurface = MaterialTheme.colorScheme.onSurface
-    Row(
+    BoxWithConstraints(
         modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp).fillMaxWidth().height(70.dp)
             .glass(RoundedCornerShape(35.dp), strong = true).padding(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        tabs.forEachIndexed { i, t ->
-            val sel = i == selected
-            val grow by animateFloatAsState(if (sel) 1f else 0f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium), label = "tab")
-            Column(
-                Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(30.dp))
-                    .then(if (sel) Modifier.background(Violet.copy(alpha = 0.22f)) else Modifier)
-                    .bounceClick { onSelect(i) },
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
-            ) {
-                Icon(t.icon, t.label, tint = if (sel) Violet else onSurface.copy(alpha = 0.7f), modifier = Modifier.size(24.dp).scale(1f + 0.15f * grow))
-                Text(t.label, fontSize = 11.sp, color = if (sel) Violet else onSurface.copy(alpha = 0.7f),
-                    fontWeight = if (sel) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal)
+        val tabW = maxWidth / tabs.size
+        // liquid lens that glides to the selected tab with a springy overshoot
+        val x by animateDpAsState(tabW * selected, spring(Spring.DampingRatioLowBouncy, Spring.StiffnessMediumLow), label = "lens")
+        Box(
+            Modifier.offset(x = x).width(tabW).fillMaxHeight().clip(RoundedCornerShape(30.dp))
+                .background(Brush.linearGradient(listOf(Violet.copy(alpha = 0.50f), Blue.copy(alpha = 0.34f))))
+                .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = 0.7f), Color.White.copy(alpha = 0.05f))), RoundedCornerShape(30.dp))
+        )
+        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+            tabs.forEachIndexed { i, t ->
+                val sel = i == selected
+                val grow by animateFloatAsState(if (sel) 1f else 0f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium), label = "tab")
+                val c = if (sel) Color.White else onSurface.copy(alpha = 0.7f)
+                Column(
+                    Modifier.weight(1f).fillMaxHeight().bounceClick { onSelect(i) },
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+                ) {
+                    Icon(t.icon, t.label, tint = c, modifier = Modifier.size(24.dp).scale(1f + 0.15f * grow))
+                    Text(t.label, fontSize = 11.sp, color = c, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal)
+                }
             }
         }
     }

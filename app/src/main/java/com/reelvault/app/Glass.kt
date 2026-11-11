@@ -13,8 +13,6 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -24,11 +22,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -42,30 +44,65 @@ import dev.chrisbanes.haze.hazeChild
 /** The active haze source. Null => cheap translucent fallback (used over video / in dialogs). */
 val LocalHaze = staticCompositionLocalOf<HazeState?> { null }
 
-/** Liquid-glass surface: real blur via Haze (API 31+), frosted tint, specular border. */
+/**
+ * Liquid-glass surface: Haze blur (API 31+) + frosted tint, then painted "liquid" layers:
+ * a diagonal sheen, a specular rim light (bright top-left, accent bottom-right) and a faint
+ * chromatic-dispersion edge (pink / cyan offset strokes) so the glass looks thick and wet.
+ */
 @Composable
 fun Modifier.glass(shape: Shape = RoundedCornerShape(24.dp), strong: Boolean = false): Modifier {
     val dark = LocalDark.current
     val haze = LocalHaze.current
     val tint = if (dark) Color(0xFF1B1433).copy(alpha = if (strong) 0.55f else 0.34f)
     else Color.White.copy(alpha = if (strong) 0.62f else 0.42f)
-    val border = Brush.linearGradient(
-        listOf(Color.White.copy(alpha = if (dark) 0.38f else 0.95f), Color.White.copy(alpha = 0.05f), Violet.copy(alpha = 0.40f))
-    )
     val base = if (haze != null)
         this.hazeChild(state = haze, shape = shape, style = HazeStyle(tint = HazeTint(tint), blurRadius = 20.dp, noiseFactor = 0.04f))
     else this.clip(shape).background(if (dark) tint.copy(alpha = tint.alpha + 0.2f) else tint)
-    return base.border(BorderStroke(1.dp, border), shape)
+    return base.drawWithContent {
+        drawContent()
+        val outline = shape.createOutline(size, layoutDirection, this)
+        val w = size.width
+        val h = size.height
+        val rim = 1.4.dp.toPx()
+        // sheen
+        drawOutline(
+            outline,
+            Brush.linearGradient(
+                0f to Color.White.copy(alpha = if (dark) 0.20f else 0.55f),
+                0.45f to Color.Transparent,
+                1f to Blue.copy(alpha = 0.10f),
+                start = Offset(0f, 0f), end = Offset(w * 0.8f, h),
+            ),
+        )
+        // chromatic dispersion
+        translate(left = 0.9f, top = 0.9f) { drawOutline(outline, Pink.copy(alpha = 0.22f), style = Stroke(rim)) }
+        translate(left = -0.9f, top = -0.9f) { drawOutline(outline, Color(0xFF38E8FF).copy(alpha = 0.22f), style = Stroke(rim)) }
+        // specular rim
+        drawOutline(
+            outline,
+            Brush.linearGradient(
+                0f to Color.White.copy(alpha = if (dark) 0.85f else 1f),
+                0.35f to Color.White.copy(alpha = 0.06f),
+                0.65f to Color.White.copy(alpha = 0.04f),
+                1f to Violet.copy(alpha = 0.75f),
+                start = Offset(0f, 0f), end = Offset(w, h),
+            ),
+            style = Stroke(rim),
+        )
+    }
 }
 
-/** Spring press animation + click. Put it FIRST in the chain so everything after it scales. */
+/** Jelly press: x and y springs differ, so the glass squishes and wobbles back like liquid. */
 fun Modifier.bounceClick(enabled: Boolean = true, onClick: () -> Unit): Modifier = composed {
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
-    val s by animateFloatAsState(
-        if (pressed) 0.90f else 1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium), label = "press"
+    val sx by animateFloatAsState(
+        if (pressed) 0.93f else 1f, spring(Spring.DampingRatioHighBouncy, Spring.StiffnessMedium), label = "sx"
     )
-    this.scale(s).clickable(src, null, enabled, onClick = onClick)
+    val sy by animateFloatAsState(
+        if (pressed) 0.88f else 1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow), label = "sy"
+    )
+    this.graphicsLayer { scaleX = sx; scaleY = sy }.clickable(src, null, enabled, onClick = onClick)
 }
 
 @Composable
@@ -85,9 +122,7 @@ fun AppBackground() {
 
 @Composable
 fun LogoMark(size: Dp) {
-    Box(Modifier.size(size).clip(RoundedCornerShape(size * 0.3f)).background(AccentBrush), contentAlignment = Alignment.Center) {
-        Icon(Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(size * 0.65f))
-    }
+    Image(painterResource(R.drawable.ic_logo_mark), "ReelVault", Modifier.size(size).clip(RoundedCornerShape(size * 0.28f)))
 }
 
 @Composable
