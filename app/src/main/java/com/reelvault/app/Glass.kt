@@ -59,7 +59,10 @@ fun Modifier.glass(shape: Shape = RoundedCornerShape(24.dp), strong: Boolean = f
     val tint = if (dark) Color(0xFF1B1433).copy(alpha = if (strong) 0.55f else 0.34f)
     else Color.White.copy(alpha = if (strong) 0.62f else 0.42f)
     val base = if (haze != null)
-        this.hazeChild(state = haze, shape = shape, style = HazeStyle(tint = HazeTint(tint), blurRadius = 20.dp, noiseFactor = 0.04f))
+        this.hazeChild(state = haze, shape = shape, style = HazeStyle(
+            backgroundColor = if (dark) Color(0xFF07050F) else Color(0xFFF3F0FF),
+            tint = HazeTint(tint), blurRadius = 20.dp, noiseFactor = 0.04f,
+        ))
     else this.clip(shape).background(if (dark) tint.copy(alpha = tint.alpha + 0.2f) else tint)
     return base.drawWithContent {
         drawContent()
