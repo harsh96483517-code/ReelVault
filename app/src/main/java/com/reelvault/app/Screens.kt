@@ -330,6 +330,7 @@ fun SettingsScreen(vm: MainVm, onBack: () -> Unit) {
     CompositionLocalProvider(LocalHaze provides haze) {
         Box(Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize().haze(haze)) {
+              CompositionLocalProvider(LocalHaze provides null) {
                 AppBackground()
                 Column(
                     Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding()
@@ -384,6 +385,7 @@ fun SettingsScreen(vm: MainVm, onBack: () -> Unit) {
                     Text("ReelVault 1.0 • 100% offline • no ads • no login", Modifier.fillMaxWidth(),
                         textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall, color = onSurface.copy(alpha = 0.5f))
                 }
+              }
             }
             Row(
                 Modifier.statusBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().height(60.dp)

@@ -94,6 +94,8 @@ fun MainScreen(vm: MainVm) {
             CompositionLocalProvider(LocalHaze provides hazeState) {
                 Box(Modifier.fillMaxSize()) {
                     Box(Modifier.fillMaxSize().haze(hazeState)) {
+                      // Content INSIDE the haze source must not use hazeChild itself (it would blur itself and crash).
+                      CompositionLocalProvider(LocalHaze provides null) {
                         AppBackground()
                         when (tab) {
                             0 -> HomeScreen(vm, perm, { askPerm() }, search, topPad, bottomPad, homeGrid, homeList) { uris, i -> req = PlayRequest(uris, i) }
@@ -101,6 +103,7 @@ fun MainScreen(vm: MainVm) {
                             2 -> FavoritesScreen(vm, topPad, bottomPad) { req = it }
                             else -> ProfileScreen(vm, topPad, bottomPad) { settings = true }
                         }
+                      }
                     }
                     TopHeader(tab == 0, search, { search = !search; if (!search) vm.query.value = "" }, { settings = true },
                         Modifier.align(Alignment.TopCenter))
