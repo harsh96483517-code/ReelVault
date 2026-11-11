@@ -13,7 +13,13 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -48,6 +54,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
@@ -68,6 +75,8 @@ private class PlayerState(val player: ExoPlayer) {
     var loop by mutableStateOf(true)
     var full by mutableStateOf(false)
     var showVol by mutableStateOf(false)
+    var fill by mutableStateOf(true)      // fill the screen (zoom) for portrait videos
+    var portrait by mutableStateOf(true)
     var onEnded: () -> Unit = {}
 
     fun toggle() {
@@ -119,6 +128,9 @@ fun ReelsScreen(vm: MainVm, req: PlayRequest, onClose: () -> Unit) {
 
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) { st.playing = isPlaying }
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                if (videoSize.width > 0 && videoSize.height > 0) st.portrait = videoSize.width <= videoSize.height
+            }
             override fun onPlayerError(error: PlaybackException) { st.error = "This video can't be played on this device." }
             override fun onPlaybackStateChanged(state: Int) { if (state == Player.STATE_ENDED) st.onEnded() }
         }
@@ -199,7 +211,7 @@ private fun ReelPage(
             )
         }
     ) {
-        Thumb(uri, Modifier.fillMaxSize(), ContentScale.Fit)
+        Thumb(uri, Modifier.fillMaxSize(), if (st.fill && (!isCur || st.portrait)) ContentScale.Crop else ContentScale.Fit)
         if (isCur) AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { c ->
@@ -210,7 +222,10 @@ private fun ReelPage(
                     setKeepContentOnPlayerReset(true)
                 }
             },
-            update = { it.player = st.player },
+            update = {
+                it.player = st.player
+                it.resizeMode = if (st.fill && st.portrait) AspectRatioFrameLayout.RESIZE_MODE_ZOOM else AspectRatioFrameLayout.RESIZE_MODE_FIT
+            },
             onRelease = { it.player = null },
         )
 
@@ -268,70 +283,75 @@ private fun ReelPage(
                 }
             }
 
-            // Right action rail
-            Column(Modifier.align(Alignment.BottomEnd).padding(bottom = 150.dp), horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                RailButton(if (e?.liked == true) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, "Like",
-                    if (e?.liked == true) Pink else Color.White) { vm.toggleLike(uri) }
-                RailButton(if (e?.favorite == true) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder, "Save",
-                    if (e?.favorite == true) Color(0xFFB794FF) else Color.White) { vm.toggleFavorite(uri) }
-                RailButton(Icons.Rounded.Share, "Share", Color.White) {
-                    val i = Intent(Intent.ACTION_SEND).apply {
-                        type = "video/*"; putExtra(Intent.EXTRA_STREAM, uri.toUri())
-                        clipData = ClipData.newRawUri("", uri.toUri()); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            // Bottom block: info + action rail side by side, glass controls underneath (nothing overlaps)
+            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                    Column(Modifier.weight(1f).padding(end = 10.dp, bottom = 2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Avatar(prefs.avatar, prefs.name, 38.dp)
+                            Text(prefs.handle.ifBlank { prefs.name.ifBlank { "reelvault" } }, color = Color.White,
+                                fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Text(e?.name ?: "", color = Color.White, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (!e?.caption.isNullOrBlank()) Text(e!!.caption, color = Color.White.copy(alpha = 0.9f), maxLines = 2,
+                            overflow = TextOverflow.Ellipsis, fontSize = 14.sp)
                     }
-                    ctx.startActivity(Intent.createChooser(i, "Share video"))
-                }
-                Box {
-                    RailButton(Icons.Rounded.MoreVert, "More", Color.White) { moreMenu = true }
-                    DropdownMenu(moreMenu, { moreMenu = false }) {
-                        DropdownMenuItem({ Text("Edit caption") }, { moreMenu = false; editCaption = true }, leadingIcon = { Icon(Icons.Rounded.Edit, null) })
-                        DropdownMenuItem({ Text("Video info") }, { moreMenu = false; info = true }, leadingIcon = { Icon(Icons.Rounded.Info, null) })
-                        DropdownMenuItem({ Text("Open with…") }, {
-                            moreMenu = false
-                            val i = Intent(Intent.ACTION_VIEW).apply { setDataAndType(uri.toUri(), "video/*"); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-                            runCatching { ctx.startActivity(Intent.createChooser(i, "Open with")) }
-                        }, leadingIcon = { Icon(Icons.Rounded.OpenInNew, null) })
-                        DropdownMenuItem({ Text(if (st.loop) "Loop: on" else "Loop: off") }, {
-                            st.loop = !st.loop
-                            st.player.repeatMode = if (st.loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
-                            moreMenu = false
-                        }, leadingIcon = { Icon(Icons.Rounded.Repeat, null) })
+                    // Right action rail
+                    Column(horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        RailButton(if (e?.liked == true) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, "Like",
+                            if (e?.liked == true) Pink else Color.White) { vm.toggleLike(uri) }
+                        RailButton(if (e?.favorite == true) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder, "Save",
+                            if (e?.favorite == true) Color(0xFFB794FF) else Color.White) { vm.toggleFavorite(uri) }
+                        RailButton(Icons.Rounded.Share, "Share", Color.White) {
+                            val i = Intent(Intent.ACTION_SEND).apply {
+                                type = "video/*"; putExtra(Intent.EXTRA_STREAM, uri.toUri())
+                                clipData = ClipData.newRawUri("", uri.toUri()); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            ctx.startActivity(Intent.createChooser(i, "Share video"))
+                        }
+                        Box {
+                            RailButton(Icons.Rounded.MoreVert, "More", Color.White) { moreMenu = true }
+                            DropdownMenu(moreMenu, { moreMenu = false }) {
+                                DropdownMenuItem({ Text("Edit caption") }, { moreMenu = false; editCaption = true }, leadingIcon = { Icon(Icons.Rounded.Edit, null) })
+                                DropdownMenuItem({ Text("Video info") }, { moreMenu = false; info = true }, leadingIcon = { Icon(Icons.Rounded.Info, null) })
+                                DropdownMenuItem({ Text("Open with…") }, {
+                                    moreMenu = false
+                                    val i = Intent(Intent.ACTION_VIEW).apply { setDataAndType(uri.toUri(), "video/*"); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+                                    runCatching { ctx.startActivity(Intent.createChooser(i, "Open with")) }
+                                }, leadingIcon = { Icon(Icons.Rounded.OpenInNew, null) })
+                                DropdownMenuItem({ Text(if (st.fill) "Fill screen: on" else "Fill screen: off") }, {
+                                    st.fill = !st.fill; moreMenu = false
+                                }, leadingIcon = { Icon(Icons.Rounded.Fullscreen, null) })
+                                DropdownMenuItem({ Text(if (st.loop) "Loop: on" else "Loop: off") }, {
+                                    st.loop = !st.loop
+                                    st.player.repeatMode = if (st.loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+                                    moreMenu = false
+                                }, leadingIcon = { Icon(Icons.Rounded.Repeat, null) })
+                            }
+                        }
                     }
-                }
-            }
 
-            // Bottom: profile, caption, floating glass controls
-            Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(end = 64.dp, bottom = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Avatar(prefs.avatar, prefs.name, 38.dp)
-                    Text(prefs.handle.ifBlank { prefs.name.ifBlank { "reelvault" } }, color = Color.White, fontWeight = FontWeight.SemiBold)
                 }
-                Text(e?.name ?: "", color = Color.White, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (!e?.caption.isNullOrBlank()) Text(e!!.caption, color = Color.White.copy(alpha = 0.9f), maxLines = 2,
-                    overflow = TextOverflow.Ellipsis, fontSize = 14.sp)
-            }
-            Row(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth().glass(RoundedCornerShape(28.dp), true)
-                    .padding(horizontal = 8.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton({ if (isCur) st.toggle() }) {
-                    Icon(if (st.paused) Icons.Rounded.PlayArrow else Icons.Rounded.Pause, "Play/pause", tint = Color.White)
-                }
-                val frac = if (isCur && st.dur > 0) (st.pos.toFloat() / st.dur).coerceIn(0f, 1f) else 0f
-                Slider(
-                    value = if (seeking) seekV else frac,
-                    onValueChange = { seeking = true; seekV = it },
-                    onValueChangeFinished = { if (isCur) st.player.seekTo((seekV * st.dur).toLong()); seeking = false },
-                    modifier = Modifier.weight(1f),
-                    colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Violet, inactiveTrackColor = Color.White.copy(alpha = 0.3f)),
-                )
-                Text("${fmtDur(if (isCur) st.pos else 0)} / ${fmtDur(if (isCur) st.dur else e?.durationMs ?: 0)}",
-                    color = Color.White, fontSize = 11.sp)
-                IconButton({ st.full = !st.full }) {
-                    Icon(if (st.full) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, "Full screen", tint = Color.White)
+                Row(
+                    Modifier.fillMaxWidth().glass(RoundedCornerShape(28.dp), true).padding(horizontal = 6.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.bounceClick { if (isCur) st.toggle() }.size(40.dp), contentAlignment = Alignment.Center) {
+                        Icon(if (st.paused) Icons.Rounded.PlayArrow else Icons.Rounded.Pause, "Play/pause", tint = Color.White)
+                    }
+                    val frac = if (isCur && st.dur > 0) (st.pos.toFloat() / st.dur).coerceIn(0f, 1f) else 0f
+                    SeekBar(
+                        value = if (seeking) seekV else frac,
+                        onChange = { seeking = true; seekV = it },
+                        onDone = { if (isCur) st.player.seekTo((seekV * st.dur).toLong()); seeking = false },
+                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                    )
+                    Text("${fmtDur(if (isCur) st.pos else 0)} / ${fmtDur(if (isCur) st.dur else e?.durationMs ?: 0)}",
+                        color = Color.White, fontSize = 11.sp, maxLines = 1)
+                    Box(Modifier.bounceClick { st.full = !st.full }.size(40.dp), contentAlignment = Alignment.Center) {
+                        Icon(if (st.full) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, "Full screen", tint = Color.White)
+                    }
                 }
             }
         }
@@ -361,5 +381,30 @@ private fun RailButton(icon: androidx.compose.ui.graphics.vector.ImageVector, la
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         GlassIconButton(icon, label, onClick, size = 50.dp, tint = tint)
         Text(label, color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
+    }
+}
+
+/** Slim seek bar: thin track, gradient progress, small thumb (replaces the chunky Material slider). */
+@Composable
+private fun SeekBar(value: Float, onChange: (Float) -> Unit, onDone: () -> Unit, modifier: Modifier = Modifier) {
+    var w by remember { mutableFloatStateOf(1f) }
+    var dragging by remember { mutableStateOf(false) }
+    Canvas(
+        modifier.height(28.dp).onSizeChanged { w = it.width.toFloat().coerceAtLeast(1f) }
+            .pointerInput(Unit) { detectTapGestures { o -> onChange((o.x / w).coerceIn(0f, 1f)); onDone() } }
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = { dragging = true; onChange((it.x / w).coerceIn(0f, 1f)) },
+                    onDragEnd = { dragging = false; onDone() },
+                    onDragCancel = { dragging = false; onDone() },
+                ) { change, _ -> onChange((change.position.x / w).coerceIn(0f, 1f)) }
+            }
+    ) {
+        val cy = size.height / 2
+        val th = 3.dp.toPx()
+        val x = value.coerceIn(0f, 1f) * size.width
+        drawRoundRect(Color.White.copy(alpha = 0.30f), Offset(0f, cy - th / 2), Size(size.width, th), CornerRadius(th))
+        drawRoundRect(Brush.horizontalGradient(listOf(Violet, Blue)), Offset(0f, cy - th / 2), Size(x.coerceAtLeast(th), th), CornerRadius(th))
+        drawCircle(Color.White, if (dragging) 8.dp.toPx() else 5.5f.dp.toPx(), Offset(x, cy))
     }
 }

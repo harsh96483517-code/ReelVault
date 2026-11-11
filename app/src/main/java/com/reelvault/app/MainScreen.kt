@@ -125,9 +125,8 @@ private fun TopHeader(showSearch: Boolean, searchOn: Boolean, onSearch: () -> Un
         LogoMark(38.dp)
         Column(Modifier.weight(1f)) {
             Text("ReelVault", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = onSurface)
-            Text("Offline Video Player", style = MaterialTheme.typography.bodySmall, color = onSurface.copy(alpha = 0.65f), maxLines = 1)
+            Text("Your Reels. Your Phone.", style = MaterialTheme.typography.bodySmall, color = onSurface.copy(alpha = 0.65f), maxLines = 1)
         }
-        Icon(Icons.Rounded.WifiOff, "Offline", tint = Violet, modifier = Modifier.size(20.dp))
         if (showSearch) GlassIconButton(if (searchOn) Icons.Rounded.Close else Icons.Rounded.Search, "Search", onSearch, size = 40.dp)
         GlassIconButton(Icons.Rounded.Settings, "Settings", onSettings, size = 40.dp)
     }

@@ -48,49 +48,56 @@ import dev.chrisbanes.haze.hazeChild
 val LocalHaze = staticCompositionLocalOf<HazeState?> { null }
 
 /**
- * Liquid-glass surface: Haze blur (API 31+) + frosted tint, then painted "liquid" layers:
- * a diagonal sheen, a specular rim light (bright top-left, accent bottom-right) and a faint
- * chromatic-dispersion edge (pink / cyan offset strokes) so the glass looks thick and wet.
+ * Liquid-glass surface. With a Haze source: real background blur + light frosted tint.
+ * Without one (over video / inside the blurred area): a white "glass" gradient fill.
+ * On top: diagonal sheen, top-edge lens highlight, pink/cyan edge dispersion and a bright specular rim.
  */
 @Composable
 fun Modifier.glass(shape: Shape = RoundedCornerShape(24.dp), strong: Boolean = false): Modifier {
     val dark = LocalDark.current
     val haze = LocalHaze.current
-    val tint = if (dark) Color(0xFF1B1433).copy(alpha = if (strong) 0.55f else 0.34f)
-    else Color.White.copy(alpha = if (strong) 0.62f else 0.42f)
+    val fill = if (dark) Color.White.copy(alpha = if (strong) 0.16f else 0.10f)
+    else Color.White.copy(alpha = if (strong) 0.62f else 0.45f)
     val base = if (haze != null)
         this.hazeChild(state = haze, shape = shape, style = HazeStyle(
             backgroundColor = if (dark) Color(0xFF07050F) else Color(0xFFF3F0FF),
-            tint = HazeTint(tint), blurRadius = 20.dp, noiseFactor = 0.04f,
+            tint = HazeTint(fill), blurRadius = 28.dp, noiseFactor = 0.03f,
         ))
-    else this.clip(shape).background(if (dark) tint.copy(alpha = tint.alpha + 0.2f) else tint)
+    else this.clip(shape)
+        .background(if (dark) Color.Black.copy(alpha = 0.16f) else Color.Transparent)
+        .background(Brush.linearGradient(listOf(fill.copy(alpha = fill.alpha * 1.7f), fill.copy(alpha = fill.alpha * 0.7f))))
     return base.drawWithContent {
         drawContent()
         val outline = shape.createOutline(size, layoutDirection, this)
         val w = size.width
         val h = size.height
-        val rim = 1.4.dp.toPx()
-        // sheen
+        val rim = 1.6.dp.toPx()
+        // diagonal sheen
         drawOutline(
             outline,
             Brush.linearGradient(
-                0f to Color.White.copy(alpha = if (dark) 0.20f else 0.55f),
-                0.45f to Color.Transparent,
-                1f to Blue.copy(alpha = 0.10f),
+                0f to Color.White.copy(alpha = if (dark) 0.26f else 0.55f),
+                0.40f to Color.Transparent,
+                1f to Blue.copy(alpha = 0.14f),
                 start = Offset(0f, 0f), end = Offset(w * 0.8f, h),
             ),
         )
+        // top lens highlight (light pooling at the top edge)
+        drawOutline(
+            outline,
+            Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.22f else 0.5f), 0.28f to Color.Transparent, startY = 0f, endY = h),
+        )
         // chromatic dispersion
-        translate(left = 0.9f, top = 0.9f) { drawOutline(outline, Pink.copy(alpha = 0.22f), style = Stroke(rim)) }
-        translate(left = -0.9f, top = -0.9f) { drawOutline(outline, Color(0xFF38E8FF).copy(alpha = 0.22f), style = Stroke(rim)) }
+        translate(left = 1.1f, top = 1.1f) { drawOutline(outline, Pink.copy(alpha = 0.30f), style = Stroke(rim)) }
+        translate(left = -1.1f, top = -1.1f) { drawOutline(outline, Color(0xFF38E8FF).copy(alpha = 0.30f), style = Stroke(rim)) }
         // specular rim
         drawOutline(
             outline,
             Brush.linearGradient(
-                0f to Color.White.copy(alpha = if (dark) 0.85f else 1f),
-                0.35f to Color.White.copy(alpha = 0.06f),
-                0.65f to Color.White.copy(alpha = 0.04f),
-                1f to Violet.copy(alpha = 0.75f),
+                0f to Color.White.copy(alpha = 0.95f),
+                0.30f to Color.White.copy(alpha = 0.10f),
+                0.70f to Color.White.copy(alpha = 0.06f),
+                1f to Violet.copy(alpha = 0.85f),
                 start = Offset(0f, 0f), end = Offset(w, h),
             ),
             style = Stroke(rim),
