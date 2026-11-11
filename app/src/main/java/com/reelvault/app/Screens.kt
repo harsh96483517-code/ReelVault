@@ -361,6 +361,32 @@ fun SettingsScreen(vm: MainVm, onBack: () -> Unit) {
                         }
                     }
                     GlassCard {
+                        Text("Direct Reels button", color = onSurface, fontWeight = FontWeight.SemiBold)
+                        Text("What the ▶ button in the bottom dock plays", style = MaterialTheme.typography.bodySmall,
+                            color = onSurface.copy(alpha = 0.65f))
+                        Spacer(Modifier.height(10.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            GlassChip("Random", { vm.setPref { it[K.reelsRandom] = true } }, icon = Icons.Rounded.Shuffle, selected = prefs.reelsRandom)
+                            GlassChip("In order", { vm.setPref { it[K.reelsRandom] = false } }, icon = Icons.Rounded.ViewList, selected = !prefs.reelsRandom)
+                        }
+                    }
+                    GlassCard {
+                        val updStatus by vm.updateStatus.collectAsState()
+                        SwitchRow("App updates", "Check GitHub for a new version when online", prefs.autoUpdate) { v -> vm.setPref { it[K.autoUpdate] = v } }
+                        var repo by remember(prefs.updateRepo) { mutableStateOf(prefs.updateRepo.ifBlank { BuildConfig.UPDATE_REPO }) }
+                        OutlinedTextField(
+                            repo, { repo = it.trim(); vm.setPref { p -> p[K.updateRepo] = repo } },
+                            label = { Text("GitHub repo (owner/name)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            GlassChip("Check now", { vm.checkUpdate(true) }, icon = Icons.Rounded.Refresh)
+                            Text("v${Updater.currentVersion(ctx)}", color = onSurface.copy(alpha = 0.65f), style = MaterialTheme.typography.bodySmall)
+                        }
+                        if (updStatus != null) Text(updStatus!!, Modifier.padding(top = 8.dp), color = onSurface.copy(alpha = 0.75f),
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    GlassCard {
                         Text("Video folders", color = onSurface, fontWeight = FontWeight.SemiBold)
                         Text("${prefs.folders.size} custom folder(s) added. Manage them in Library.",
                             style = MaterialTheme.typography.bodySmall, color = onSurface.copy(alpha = 0.65f))
@@ -382,7 +408,7 @@ fun SettingsScreen(vm: MainVm, onBack: () -> Unit) {
                             cleared = true
                         }, icon = Icons.Rounded.Delete)
                     }
-                    Text("ReelVault 1.0 • 100% offline • no ads • no login", Modifier.fillMaxWidth(),
+                    Text("ReelVault • plays offline • no ads • no login", Modifier.fillMaxWidth(),
                         textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall, color = onSurface.copy(alpha = 0.5f))
                 }
               }

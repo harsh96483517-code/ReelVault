@@ -15,6 +15,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -79,9 +80,28 @@ fun MainScreen(vm: MainVm) {
     var scanned by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(perm) { if (perm && !scanned && prefs.auto) { scanned = true; vm.refresh() } }
 
+    val allVideos by vm.all.collectAsState()
+    val update by vm.update.collectAsState()
+    val progress by vm.downloadProgress.collectAsState()
+    val status by vm.updateStatus.collectAsState()
+    LaunchedEffect(Unit) { vm.checkUpdate(manual = false) }
+
+    // Dock "Reels" button: straight into the player, random or in order (Settings).
+    val startReels: () -> Unit = {
+        if (allVideos.isEmpty()) {
+            android.widget.Toast.makeText(ctx, "No videos yet. Open Library and scan.", android.widget.Toast.LENGTH_SHORT).show()
+        } else {
+            val ordered = allVideos.sortedByDescending { it.dateAdded }.map { it.uri }
+            req = if (prefs.reelsRandom) PlayRequest(ordered.shuffled(), 0)
+            else PlayRequest(ordered, if (prefs.remember) ordered.indexOf(prefs.last).coerceAtLeast(0) else 0)
+        }
+    }
+
     val homeGrid = rememberLazyGridState()
     val homeList = rememberLazyListState()
     val hazeState = remember { HazeState() }
+
+    update?.let { UpdateDialog(vm, it, progress, status) }
 
     when {
         req != null -> ReelsScreen(vm, req!!) { req = null }
@@ -107,11 +127,33 @@ fun MainScreen(vm: MainVm) {
                     }
                     TopHeader(tab == 0, search, { search = !search; if (!search) vm.query.value = "" }, { settings = true },
                         Modifier.align(Alignment.TopCenter))
-                    BottomBar(tab, { tab = it }, Modifier.align(Alignment.BottomCenter))
+                    BottomBar(tab, { tab = it }, startReels, Modifier.align(Alignment.BottomCenter))
                 }
             }
         }
     }
+}
+
+@Composable
+private fun UpdateDialog(vm: MainVm, info: UpdateInfo, progress: Float?, status: String?) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { if (progress == null) vm.dismissUpdate() },
+        title = { Text("Update available • v${info.version}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(info.notes.trim().ifBlank { "A new version of ReelVault is ready." }.take(500))
+                if (info.size > 0) Text("Size: ${fmtSize(info.size)}", style = MaterialTheme.typography.bodySmall)
+                if (progress != null) androidx.compose.material3.LinearProgressIndicator({ progress }, Modifier.fillMaxWidth(), color = Violet)
+                if (status != null && progress == null) Text(status, style = MaterialTheme.typography.bodySmall, color = Pink)
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton({ vm.downloadAndInstall() }, enabled = progress == null) {
+                Text(if (progress == null) "Update now" else "Downloading…")
+            }
+        },
+        dismissButton = { androidx.compose.material3.TextButton({ vm.dismissUpdate() }, enabled = progress == null) { Text("Later") } },
+    )
 }
 
 @Composable
@@ -133,31 +175,39 @@ private fun TopHeader(showSearch: Boolean, searchOn: Boolean, onSearch: () -> Un
 }
 
 @Composable
-private fun BottomBar(selected: Int, onSelect: (Int) -> Unit, modifier: Modifier) {
+private fun BottomBar(selected: Int, onSelect: (Int) -> Unit, onReels: () -> Unit, modifier: Modifier) {
+    val dark = LocalDark.current
     val onSurface = MaterialTheme.colorScheme.onSurface
     BoxWithConstraints(
-        modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp).fillMaxWidth().height(70.dp)
-            .glass(RoundedCornerShape(35.dp), strong = true).padding(6.dp),
+        modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp).fillMaxWidth().height(68.dp)
+            .glass(RoundedCornerShape(34.dp), strong = true).padding(6.dp),
     ) {
-        val tabW = maxWidth / tabs.size
-        // liquid lens that glides to the selected tab with a springy overshoot
-        val x by animateDpAsState(tabW * selected, spring(Spring.DampingRatioLowBouncy, Spring.StiffnessMediumLow), label = "lens")
+        val slotW = maxWidth / 5
+        val slot = if (selected >= 2) selected + 1 else selected   // slot 2 is the Reels button
+        // liquid lens that glides to the selected icon with a springy overshoot
+        val x by animateDpAsState(slotW * slot, spring(Spring.DampingRatioLowBouncy, Spring.StiffnessMediumLow), label = "lens")
         Box(
-            Modifier.offset(x = x).width(tabW).fillMaxHeight().clip(RoundedCornerShape(30.dp))
-                .background(Brush.linearGradient(listOf(Violet.copy(alpha = 0.50f), Blue.copy(alpha = 0.34f))))
-                .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = 0.7f), Color.White.copy(alpha = 0.05f))), RoundedCornerShape(30.dp))
+            Modifier.offset(x = x).width(slotW).fillMaxHeight().clip(RoundedCornerShape(28.dp))
+                .background(if (dark) Brush.linearGradient(listOf(Violet.copy(alpha = 0.50f), Blue.copy(alpha = 0.34f)))
+                            else Brush.linearGradient(listOf(Violet.copy(alpha = 0.16f), Violet.copy(alpha = 0.16f))))
+                .border(1.dp, if (dark) Color.White.copy(alpha = 0.35f) else Violet.copy(alpha = 0.35f), RoundedCornerShape(28.dp))
         )
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-            tabs.forEachIndexed { i, t ->
-                val sel = i == selected
-                val grow by animateFloatAsState(if (sel) 1f else 0f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium), label = "tab")
-                val c = if (sel) Color.White else onSurface.copy(alpha = 0.7f)
-                Column(
-                    Modifier.weight(1f).fillMaxHeight().bounceClick { onSelect(i) },
-                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
-                ) {
-                    Icon(t.icon, t.label, tint = c, modifier = Modifier.size(24.dp).scale(1f + 0.15f * grow))
-                    Text(t.label, fontSize = 11.sp, color = c, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal)
+            for (i in 0..4) {
+                if (i == 2) {
+                    Box(Modifier.weight(1f).fillMaxHeight().bounceClick(onClick = onReels), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(50.dp).clip(CircleShape).background(AccentBrush), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Rounded.PlayArrow, "Play reels", tint = Color.White, modifier = Modifier.size(30.dp))
+                        }
+                    }
+                } else {
+                    val t = if (i > 2) i - 1 else i
+                    val sel = t == selected
+                    val grow by animateFloatAsState(if (sel) 1f else 0f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium), label = "tab")
+                    val c = if (sel) (if (dark) Color.White else Violet) else onSurface.copy(alpha = 0.72f)
+                    Box(Modifier.weight(1f).fillMaxHeight().bounceClick { onSelect(t) }, contentAlignment = Alignment.Center) {
+                        Icon(tabs[t].icon, tabs[t].label, tint = c, modifier = Modifier.size(27.dp).scale(1f + 0.15f * grow))
+                    }
                 }
             }
         }

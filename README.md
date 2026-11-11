@@ -43,3 +43,17 @@ button turned downward, with a small play cut-out inside. Files: `res/drawable/i
 
 ## If the app closes on open
 The next launch shows the crash text on screen (Copy error / Retry in safe mode). Send that text to get a fix.
+
+
+## Releases & in-app updates
+- CI signs every APK with the fixed key in `app/reelvault.keystore`, so updates install over the old version.
+  (Builds signed with an older random debug key must be uninstalled once.)
+- To ship an update: GitHub ▸ Releases ▸ Draft a new release ▸ create tag like `v1.1` ▸ Publish.
+  `release.yml` builds the APK and attaches it. Installed apps (with internet) show an "Update available" popup.
+- The repo is read from CI automatically; you can also type it in Settings ▸ App updates. The repo must be public.
+- INTERNET is only used for that update check/download. Android will ask once to "allow install unknown apps".
+- Security note: the keystore is committed for convenience. For a public repo, move it to GitHub Secrets later.
+
+## Dock & Reels
+Bottom dock is icons only. The center ▶ button starts Reels directly; Settings ▸ Direct Reels button
+chooses Random or In order (continues from last played when "Remember last played" is on).

@@ -13,28 +13,28 @@ android {
         applicationId = "com.reelvault.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = (project.findProperty("appCode") as String?)?.toIntOrNull() ?: 1
+        versionName = (project.findProperty("appVersion") as String?) ?: "1.0"
+        // GitHub repo ("owner/name") used by the in-app update check; set by CI via -PgithubRepo=
+        buildConfigField("String", "UPDATE_REPO", "\"${project.findProperty("githubRepo") ?: ""}\"")
     }
-    // Stable debug key, committed on purpose so every CI build is signed with the
-    // same certificate and new APKs install straight over the old one.
+
+    // One fixed key for every build so in-app updates install over the old version.
     signingConfigs {
-        create("stable") {
-            storeFile = rootProject.file("debug.keystore")
-            storePassword = "android"
+        create("reelvault") {
+            storeFile = file("reelvault.keystore")
+            storePassword = "reelvault123"
             keyAlias = "reelvault"
-            keyPassword = "android"
-            storeType = "PKCS12"
+            keyPassword = "reelvault123"
         }
     }
     buildTypes {
-        debug {
-            signingConfig = signingConfigs.getByName("stable")
-        }
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("reelvault")
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("reelvault")
         }
     }
     compileOptions {
@@ -42,7 +42,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 }
 
 dependencies {

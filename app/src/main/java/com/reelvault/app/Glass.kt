@@ -4,7 +4,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -31,9 +31,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -55,6 +54,11 @@ val LocalHaze = staticCompositionLocalOf<HazeState?> { null }
 @Composable
 fun Modifier.glass(shape: Shape = RoundedCornerShape(24.dp), strong: Boolean = false): Modifier {
     val dark = LocalDark.current
+    if (!dark) {
+        // Light theme: simple, high-contrast white card (no blur) so everything is easy to read.
+        return this.shadow(if (strong) 8.dp else 1.5.dp, shape, ambientColor = Color(0x33201060), spotColor = Color(0x33201060))
+            .clip(shape).background(Color.White).border(1.dp, Color(0xFFDAD5EE), shape)
+    }
     val haze = LocalHaze.current
     val fill = if (dark) Color.White.copy(alpha = if (strong) 0.16f else 0.10f)
     else Color.White.copy(alpha = if (strong) 0.62f else 0.45f)
@@ -121,13 +125,12 @@ fun Modifier.bounceClick(enabled: Boolean = true, onClick: () -> Unit): Modifier
 @Composable
 fun AppBackground() {
     val dark = LocalDark.current
-    val bg = MaterialTheme.colorScheme.background
+    if (!dark) { Box(Modifier.fillMaxSize().background(Color(0xFFF4F3FA))); return }
     Box(
-        Modifier.fillMaxSize().background(bg).drawBehind {
-            val a = if (dark) 0.50f else 0.28f
-            drawRect(Brush.radialGradient(listOf(Violet.copy(alpha = a), Color.Transparent),
+        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).drawBehind {
+            drawRect(Brush.radialGradient(listOf(Violet.copy(alpha = 0.50f), Color.Transparent),
                 center = Offset(size.width * 0.05f, size.height * 0.04f), radius = size.width * 1.0f))
-            drawRect(Brush.radialGradient(listOf(Blue.copy(alpha = a * 0.8f), Color.Transparent),
+            drawRect(Brush.radialGradient(listOf(Blue.copy(alpha = 0.40f), Color.Transparent),
                 center = Offset(size.width * 0.98f, size.height * 0.92f), radius = size.width * 1.1f))
         }
     )
@@ -135,32 +138,7 @@ fun AppBackground() {
 
 @Composable
 fun LogoMark(size: Dp) {
-    Canvas(Modifier.size(size).clip(RoundedCornerShape(size * 0.28f))) {
-        val w = this.size.width
-        val k = w / 108f
-        drawRect(Brush.linearGradient(listOf(Color(0xFF1E1250), Color(0xFF07050F)), Offset.Zero, Offset(w, w)))
-        drawCircle(Violet.copy(alpha = 0.20f), 40f * k, Offset(54f * k, 54f * k))
-        // vault-dial ring with a gap at 12 o'clock
-        drawArc(
-            Brush.linearGradient(listOf(Color(0xFFC4B5FD), Violet, Blue), Offset(20f * k, 20f * k), Offset(88f * k, 88f * k)),
-            startAngle = -70f, sweepAngle = 320f, useCenter = false,
-            topLeft = Offset(25f * k, 25f * k), size = Size(58f * k, 58f * k),
-            style = Stroke(4.5f * k, cap = StrokeCap.Round),
-        )
-        drawCircle(Pink, 2.8f * k, Offset(54f * k, 22f * k))
-        // V monogram = play button turned downward
-        val v = Path().apply {
-            moveTo(39f * k, 39.5f * k); lineTo(69f * k, 39.5f * k)
-            quadraticBezierTo(72.6f * k, 39.5f * k, 70.8f * k, 42.6f * k)
-            lineTo(56f * k, 69f * k)
-            quadraticBezierTo(54f * k, 72.4f * k, 52f * k, 69f * k)
-            lineTo(37.2f * k, 42.6f * k)
-            quadraticBezierTo(35.4f * k, 39.5f * k, 39f * k, 39.5f * k); close()
-        }
-        drawPath(v, Brush.linearGradient(listOf(Color(0xFFDDD6FE), Violet, Blue), Offset(38f * k, 40f * k), Offset(70f * k, 72f * k)))
-        val play = Path().apply { moveTo(48f * k, 42.5f * k); lineTo(48f * k, 54f * k); lineTo(59f * k, 48.2f * k); close() }
-        drawPath(play, Color(0xFF0B0714))
-    }
+    Image(painterResource(R.drawable.logo_app), "ReelVault", Modifier.size(size).clip(RoundedCornerShape(size * 0.235f)))
 }
 
 @Composable

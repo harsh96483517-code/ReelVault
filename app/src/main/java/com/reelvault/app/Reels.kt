@@ -8,6 +8,11 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Path
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -179,7 +184,7 @@ fun ReelsScreen(vm: MainVm, req: PlayRequest, onClose: () -> Unit) {
     }
     BackHandler { if (st.full) st.full = false else onClose() }
 
-    CompositionLocalProvider(LocalHaze provides null) {
+    CompositionLocalProvider(LocalHaze provides null, LocalDark provides true) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             VerticalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 0, key = { uris[it] }) { page ->
                 ReelPage(uris[page], byUri[uris[page]], page == pager.settledPage, st, vm, prefs, onClose)
@@ -341,8 +346,9 @@ private fun ReelPage(
                         Icon(if (st.paused) Icons.Rounded.PlayArrow else Icons.Rounded.Pause, "Play/pause", tint = Color.White)
                     }
                     val frac = if (isCur && st.dur > 0) (st.pos.toFloat() / st.dur).coerceIn(0f, 1f) else 0f
-                    SeekBar(
+                    WaveSeekBar(
                         value = if (seeking) seekV else frac,
+                        animate = isCur && st.playing && !st.paused,
                         onChange = { seeking = true; seekV = it },
                         onDone = { if (isCur) st.player.seekTo((seekV * st.dur).toLong()); seeking = false },
                         modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
@@ -384,13 +390,18 @@ private fun RailButton(icon: androidx.compose.ui.graphics.vector.ImageVector, la
     }
 }
 
-/** Slim seek bar: thin track, gradient progress, small thumb (replaces the chunky Material slider). */
+/** Modern wavy progress: the played part ripples like a wave while playing, the rest is a calm line. */
 @Composable
-private fun SeekBar(value: Float, onChange: (Float) -> Unit, onDone: () -> Unit, modifier: Modifier = Modifier) {
+private fun WaveSeekBar(value: Float, animate: Boolean, onChange: (Float) -> Unit, onDone: () -> Unit, modifier: Modifier = Modifier) {
     var w by remember { mutableFloatStateOf(1f) }
     var dragging by remember { mutableStateOf(false) }
+    var phase by remember { mutableFloatStateOf(0f) }
+    val amp by animateFloatAsState(if (animate && !dragging) 1f else 0f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow), label = "amp")
+    LaunchedEffect(animate) {
+        if (animate) while (true) withFrameNanos { phase = (it / 1_000_000_000f) * 7f }
+    }
     Canvas(
-        modifier.height(28.dp).onSizeChanged { w = it.width.toFloat().coerceAtLeast(1f) }
+        modifier.height(32.dp).onSizeChanged { w = it.width.toFloat().coerceAtLeast(1f) }
             .pointerInput(Unit) { detectTapGestures { o -> onChange((o.x / w).coerceIn(0f, 1f)); onDone() } }
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
@@ -401,10 +412,26 @@ private fun SeekBar(value: Float, onChange: (Float) -> Unit, onDone: () -> Unit,
             }
     ) {
         val cy = size.height / 2
-        val th = 3.dp.toPx()
         val x = value.coerceIn(0f, 1f) * size.width
-        drawRoundRect(Color.White.copy(alpha = 0.30f), Offset(0f, cy - th / 2), Size(size.width, th), CornerRadius(th))
-        drawRoundRect(Brush.horizontalGradient(listOf(Violet, Blue)), Offset(0f, cy - th / 2), Size(x.coerceAtLeast(th), th), CornerRadius(th))
-        drawCircle(Color.White, if (dragging) 8.dp.toPx() else 5.5f.dp.toPx(), Offset(x, cy))
+        val stroke = 3.5.dp.toPx()
+        // remaining (calm) line
+        drawLine(Color.White.copy(alpha = 0.30f), Offset(x, cy), Offset(size.width, cy), stroke * 0.8f, StrokeCap.Round)
+        // played wave
+        val path = Path()
+        val a = 3.5.dp.toPx() * amp
+        val wl = 26.dp.toPx()
+        var px = 0f
+        path.moveTo(0f, cy)
+        while (px <= x) {
+            val fade = (px / 24.dp.toPx()).coerceIn(0f, 1f)          // start flat, ripple grows in
+            path.lineTo(px, cy + a * fade * kotlin.math.sin(px / wl * 6.2831855f - phase))
+            px += 3f
+        }
+        path.lineTo(x, cy)
+        drawPath(path, Brush.horizontalGradient(listOf(Violet, Blue), 0f, size.width.coerceAtLeast(1f)),
+            style = Stroke(stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
+        // pill thumb
+        drawRoundRect(Color.White, Offset(x - 2.5.dp.toPx(), cy - (if (dragging) 13.dp else 10.dp).toPx()),
+            Size(5.dp.toPx(), (if (dragging) 26.dp else 20.dp).toPx()), CornerRadius(3.dp.toPx()))
     }
 }

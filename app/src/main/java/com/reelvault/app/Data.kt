@@ -83,6 +83,9 @@ object K {
     val handle = stringPreferencesKey("profile_handle")
     val bio = stringPreferencesKey("profile_bio")
     val avatar = stringPreferencesKey("profile_avatar")
+    val reelsRandom = booleanPreferencesKey("reels_random")
+    val autoUpdate = booleanPreferencesKey("auto_update")
+    val updateRepo = stringPreferencesKey("update_repo")
 }
 
 data class Prefs(
@@ -99,6 +102,9 @@ data class Prefs(
     val handle: String = "",
     val bio: String = "",
     val avatar: String = "",
+    val reelsRandom: Boolean = true,   // direct Reels button: random order (true) or in order (false)
+    val autoUpdate: Boolean = true,
+    val updateRepo: String = "",
 )
 
 class SettingsRepo(private val ctx: Context) {
@@ -111,6 +117,8 @@ class SettingsRepo(private val ctx: Context) {
                 speed = p[K.speed] ?: 1f, loop = p[K.loop] ?: true, folders = p[K.folders] ?: emptySet(),
                 name = p[K.name] ?: "", handle = p[K.handle] ?: "", bio = p[K.bio] ?: "",
                 avatar = p[K.avatar] ?: "",
+                reelsRandom = p[K.reelsRandom] ?: true, autoUpdate = p[K.autoUpdate] ?: true,
+                updateRepo = p[K.updateRepo] ?: "",
             )
         }
 

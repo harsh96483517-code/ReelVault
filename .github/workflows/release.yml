@@ -1,0 +1,32 @@
+name: Release APK
+
+# Publish a GitHub Release with a tag like v1.1 and this attaches the APK to it.
+# Installed apps then show an "Update available" popup.
+on:
+  push:
+    tags: [ 'v*' ]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.9
+      - name: Build release APK
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          gradle assembleRelease --stacktrace -PappVersion="$VERSION" -PappCode=${{ github.run_number }} -PgithubRepo=${{ github.repository }}
+          cp app/build/outputs/apk/release/app-release.apk "ReelVault-${GITHUB_REF_NAME}.apk"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: ReelVault-*.apk
+          generate_release_notes: true

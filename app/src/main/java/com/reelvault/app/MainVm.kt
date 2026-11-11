@@ -52,6 +52,49 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         .map { l -> l.groupingBy { it.folder }.eachCount().toList().sortedByDescending { it.second } }
         .flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    // ---- in-app updates (GitHub Releases) ----
+    val update = MutableStateFlow<UpdateInfo?>(null)
+    val updateStatus = MutableStateFlow<String?>(null)
+    val downloadProgress = MutableStateFlow<Float?>(null)
+    private var autoChecked = false
+
+    fun updateRepo(): String = prefs.value.updateRepo.trim().ifBlank { BuildConfig.UPDATE_REPO }
+
+    fun checkUpdate(manual: Boolean) {
+        val repo = updateRepo()
+        if (repo.isBlank()) { if (manual) updateStatus.value = "Add your GitHub repo (owner/name) first."; return }
+        if (!manual) { if (autoChecked || !prefs.value.autoUpdate) return; autoChecked = true }
+        viewModelScope.launch {
+            if (manual) updateStatus.value = "Checking…"
+            try {
+                val info = Updater.check(getApplication<Application>(), repo)
+                update.value = info
+                if (manual) updateStatus.value = if (info == null) "You're on the latest version." else "Version ${info.version} is available."
+            } catch (e: Exception) {
+                if (manual) updateStatus.value = "Couldn't check (offline or repo not found)."
+            }
+        }
+    }
+
+    fun downloadAndInstall() {
+        val info = update.value ?: return
+        if (downloadProgress.value != null) return
+        viewModelScope.launch {
+            downloadProgress.value = 0f
+            try {
+                val f = Updater.download(getApplication<Application>(), info) { downloadProgress.value = it }
+                downloadProgress.value = null
+                if (Updater.install(getApplication<Application>(), f)) update.value = null
+                else updateStatus.value = "Allow 'install unknown apps' for ReelVault, then tap Update again."
+            } catch (e: Exception) {
+                downloadProgress.value = null
+                updateStatus.value = "Download failed. Check your internet and try again."
+            }
+        }
+    }
+
+    fun dismissUpdate() { update.value = null }
+
     fun refresh() {
         if (scanning.value) return
         viewModelScope.launch {
