@@ -91,9 +91,9 @@ fun MainScreen(vm: MainVm) {
             val topPad = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 80.dp
             val bottomPad = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 110.dp
 
-            CompositionLocalProvider(LocalHaze provides hazeState) {
+            CompositionLocalProvider(LocalHaze provides (if (SafeMode.on) null else hazeState)) {
                 Box(Modifier.fillMaxSize()) {
-                    Box(Modifier.fillMaxSize().haze(hazeState)) {
+                    Box(Modifier.fillMaxSize().then(if (SafeMode.on) Modifier else Modifier.haze(hazeState))) {
                       // Content INSIDE the haze source must not use hazeChild itself (it would blur itself and crash).
                       CompositionLocalProvider(LocalHaze provides null) {
                         AppBackground()

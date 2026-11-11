@@ -21,3 +21,6 @@ fun fmtDate(epochSeconds: Long): String =
     SimpleDateFormat("d MMM yyyy", Locale.getDefault()).format(Date(epochSeconds * 1000))
 
 class PlayRequest(val uris: List<String>, val start: Int, val autoNext: Boolean = false)
+
+/** Set after a crash when the user picks "Retry in safe mode": disables the Haze blur layer. */
+object SafeMode { @Volatile var on: Boolean = false }

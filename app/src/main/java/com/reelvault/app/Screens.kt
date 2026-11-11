@@ -327,9 +327,9 @@ fun SettingsScreen(vm: MainVm, onBack: () -> Unit) {
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { if (it != null) vm.addFolder(it) }
     BackHandler(onBack = onBack)
 
-    CompositionLocalProvider(LocalHaze provides haze) {
+    CompositionLocalProvider(LocalHaze provides (if (SafeMode.on) null else haze)) {
         Box(Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxSize().haze(haze)) {
+            Box(Modifier.fillMaxSize().then(if (SafeMode.on) Modifier else Modifier.haze(haze))) {
               CompositionLocalProvider(LocalHaze provides null) {
                 AppBackground()
                 Column(

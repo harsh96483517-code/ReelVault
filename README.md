@@ -35,3 +35,11 @@ Originals are only ever read — never modified or deleted.
 Original ReelVault mark: a vault-dial ring (gap + pink indicator dot) around a "V" that is also a play
 button turned downward, with a small play cut-out inside. Files: `res/drawable/ic_launcher_foreground.xml`,
 `res/drawable/ic_logo_mark.xml` (used in the app header). The adaptive icon also has a monochrome layer.
+
+## Build on GitHub (no PC needed)
+1. Create a new GitHub repo and upload the *contents* of this folder (app/, build.gradle.kts, .github/ …).
+2. Open the **Actions** tab ▸ "Build debug APK" ▸ **Run workflow** (it also runs on every push).
+3. When it turns green, open the run ▸ **Artifacts** ▸ download `ReelVault-debug-apk`, unzip, install `app-debug.apk`.
+
+## If the app closes on open
+The next launch shows the crash text on screen (Copy error / Retry in safe mode). Send that text to get a fix.
