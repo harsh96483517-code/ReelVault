@@ -46,7 +46,8 @@ private val sortNames = listOf("Newest", "Oldest", "Name")
 @Composable
 fun HomeScreen(
     vm: MainVm, perm: Boolean, askPerm: () -> Unit, searchOpen: Boolean, topPad: Dp, bottomPad: Dp,
-    gridState: LazyGridState, listState: LazyListState, onPlay: (List<String>, Int) -> Unit,
+    gridState: LazyGridState, listState: LazyListState, selected: List<String>, onToggle: (String) -> Unit,
+    onPlay: (List<String>, Int) -> Unit,
 ) {
     val list by vm.visible.collectAsState()
     val prefs by vm.prefs.collectAsState()
@@ -127,8 +128,12 @@ fun HomeScreen(
                 if (q.isNotBlank() || folder != null) "Try a different search or folder." else "Open Library to pick a folder or refresh the scan.") {
                 if (q.isBlank() && folder == null) GradientButton("Scan now", Icons.Rounded.Refresh, { vm.refresh() })
             }
-            prefs.grid -> VideoGrid(list, gridState, bottomPad) { onPlay(list.map { v -> v.uri }, it) }
-            else -> VideoList(list, listState, bottomPad, { onPlay(list.map { v -> v.uri }, it) }, { vm.toggleFavorite(it) })
+            prefs.grid -> VideoGrid(list, gridState, bottomPad, selected, onToggle) { i ->
+                if (selected.isNotEmpty()) onToggle(list[i].uri) else onPlay(list.map { v -> v.uri }, i)
+            }
+            else -> VideoList(list, listState, bottomPad,
+                { i -> if (selected.isNotEmpty()) onToggle(list[i].uri) else onPlay(list.map { v -> v.uri }, i) },
+                { vm.toggleFavorite(it) }, selected, onToggle)
         }
     }
 }
@@ -156,7 +161,7 @@ fun LibraryScreen(
                     style = MaterialTheme.typography.bodyMedium, color = onSurface.copy(alpha = 0.7f))
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    GradientButton("Select Folder", Icons.Rounded.CreateNewFolder, { picker.launch(null) }, Modifier.weight(1f))
+                    GradientButton("Select Folder", Icons.Rounded.CreateNewFolder, { AppLock.bypass(); picker.launch(null) }, Modifier.weight(1f))
                     GlassIconButton(Icons.Rounded.Refresh, "Refresh library", { if (perm) vm.refresh() else askPerm() }, size = 48.dp)
                 }
                 if (scanning) {
@@ -208,7 +213,7 @@ fun LibraryScreen(
 
 // ───────────────────────── FAVORITES ─────────────────────────
 @Composable
-fun FavoritesScreen(vm: MainVm, topPad: Dp, bottomPad: Dp, onPlay: (PlayRequest) -> Unit) {
+fun FavoritesScreen(vm: MainVm, topPad: Dp, bottomPad: Dp, selected: List<String>, onToggle: (String) -> Unit, onPlay: (PlayRequest) -> Unit) {
     val favs by vm.favorites.collectAsState()
     val state = rememberLazyGridState()
     val onSurface = MaterialTheme.colorScheme.onSurface
@@ -224,14 +229,17 @@ fun FavoritesScreen(vm: MainVm, topPad: Dp, bottomPad: Dp, onPlay: (PlayRequest)
         }
         if (favs.isEmpty()) EmptyState(Icons.Rounded.FavoriteBorder, "No favorites yet",
             "Tap the bookmark on any reel to save it here.")
-        else VideoGrid(favs, state, bottomPad) { onPlay(PlayRequest(favs.map { v -> v.uri }, it, autoNext = true)) }
+        else VideoGrid(favs, state, bottomPad, selected, onToggle) { i ->
+            if (selected.isNotEmpty()) onToggle(favs[i].uri) else onPlay(PlayRequest(favs.map { v -> v.uri }, i, autoNext = true))
+        }
     }
 }
 
 // ───────────────────────── PROFILE ─────────────────────────
 @Composable
-fun ProfileScreen(vm: MainVm, topPad: Dp, bottomPad: Dp, onSettings: () -> Unit) {
+fun ProfileScreen(vm: MainVm, topPad: Dp, bottomPad: Dp, onVault: () -> Unit, onSettings: () -> Unit) {
     val prefs by vm.prefs.collectAsState()
+    val hidden by vm.hidden.collectAsState()
     val all by vm.all.collectAsState()
     val onSurface = MaterialTheme.colorScheme.onSurface
     var editing by remember { mutableStateOf(false) }
@@ -266,6 +274,17 @@ fun ProfileScreen(vm: MainVm, topPad: Dp, bottomPad: Dp, onSettings: () -> Unit)
             }
         }
         Row(
+            Modifier.fillMaxWidth().bounceClick(onClick = onVault).glass(RoundedCornerShape(20.dp)).padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(Icons.Rounded.Lock, null, tint = Violet)
+            Column(Modifier.weight(1f)) {
+                Text("Hidden vault", color = onSurface, fontWeight = FontWeight.Medium)
+                Text("${hidden.size} hidden  •  pattern or fingerprint", style = MaterialTheme.typography.bodySmall, color = onSurface.copy(alpha = 0.6f))
+            }
+            Icon(Icons.Rounded.ChevronRight, null, tint = onSurface.copy(alpha = 0.5f))
+        }
+        Row(
             Modifier.fillMaxWidth().bounceClick(onClick = onSettings).glass(RoundedCornerShape(20.dp)).padding(16.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -298,11 +317,11 @@ private fun EditProfileDialog(prefs: Prefs, onDismiss: () -> Unit, onSave: (Stri
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.clickable { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
+                Box(Modifier.clickable { AppLock.bypass(); pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
                     if (photo != null) Box(Modifier.size(96.dp).clip(CircleShape)) {
                         AsyncImage(photo, null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
                     } else Avatar(prefs.avatar, name, 96.dp)
-                    Icon(Icons.Rounded.CameraAlt, "Change photo", tint = Color.White,
+                    Icon(Icons.Rounded.CameraAlt, "Change photo", tint = OnAccent,
                         modifier = Modifier.align(Alignment.BottomEnd).size(30.dp).clip(CircleShape).background(Violet).padding(6.dp))
                 }
                 OutlinedTextField(name, { name = it.take(30) }, label = { Text("Name") }, singleLine = true)
@@ -326,6 +345,13 @@ fun SettingsScreen(vm: MainVm, onBack: () -> Unit) {
     var cleared by remember { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { if (it != null) vm.addFolder(it) }
     BackHandler(onBack = onBack)
+    var flow by remember { mutableStateOf<String?>(null) }
+    var tick by remember { mutableIntStateOf(0) }
+    when (flow) {
+        "set" -> { PatternSetup({ flow = null; tick++ }, { flow = null }); return }
+        "change" -> { UnlockPanel("Change pattern", "Draw your current pattern", { flow = "set" }, { flow = null }); return }
+        "remove" -> { UnlockPanel("Remove lock", "Draw your pattern to confirm", { AppLock.clear(); flow = null; tick++ }, { flow = null }); return }
+    }
 
     CompositionLocalProvider(LocalHaze provides (if (SafeMode.on) null else haze)) {
         Box(Modifier.fillMaxSize()) {
@@ -343,6 +369,33 @@ fun SettingsScreen(vm: MainVm, onBack: () -> Unit) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf("System", "Dark", "Light").forEachIndexed { i, n ->
                                 GlassChip(n, { vm.setPref { it[K.theme] = i } }, selected = prefs.theme == i)
+                            }
+                        }
+                    }
+                    GlassCard {
+                        val lockSet = remember(tick) { AppLock.isSet }
+                        Text("App lock", color = onSurface, fontWeight = FontWeight.SemiBold)
+                        Text("Pattern + fingerprint. Also protects the Hidden vault.", style = MaterialTheme.typography.bodySmall,
+                            color = onSurface.copy(alpha = 0.65f))
+                        Spacer(Modifier.height(10.dp))
+                        if (!lockSet) GradientButton("Set pattern lock", Icons.Rounded.Lock, { flow = "set" })
+                        else {
+                            var fp by remember(tick) { mutableStateOf(AppLock.fingerprint) }
+                            var timeout by remember(tick) { mutableLongStateOf(AppLock.timeoutMs) }
+                            if (canUseBiometric(ctx)) SwitchRow("Fingerprint unlock", "Use your fingerprint instead of the pattern", fp) {
+                                fp = it; AppLock.fingerprint = it
+                            }
+                            Text("Lock after leaving the app", color = onSurface, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 6.dp))
+                            Spacer(Modifier.height(8.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf("Instantly" to 0L, "1 min" to 60_000L, "5 min" to 300_000L).forEach { (label, ms) ->
+                                    GlassChip(label, { timeout = ms; AppLock.timeoutMs = ms }, selected = timeout == ms)
+                                }
+                            }
+                            Spacer(Modifier.height(10.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                GlassChip("Change pattern", { flow = "change" }, icon = Icons.Rounded.Lock)
+                                GlassChip("Remove lock", { flow = "remove" })
                             }
                         }
                     }
@@ -392,7 +445,7 @@ fun SettingsScreen(vm: MainVm, onBack: () -> Unit) {
                             style = MaterialTheme.typography.bodySmall, color = onSurface.copy(alpha = 0.65f))
                         Spacer(Modifier.height(10.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            GlassChip("Add folder", { picker.launch(null) }, icon = Icons.Rounded.CreateNewFolder)
+                            GlassChip("Add folder", { AppLock.bypass(); picker.launch(null) }, icon = Icons.Rounded.CreateNewFolder)
                             GlassChip("Rescan", { vm.refresh() }, icon = Icons.Rounded.Refresh)
                         }
                     }
@@ -433,6 +486,6 @@ private fun SwitchRow(title: String, sub: String, checked: Boolean, onChange: (B
             Text(title, color = onSurface, fontWeight = FontWeight.Medium)
             Text(sub, style = MaterialTheme.typography.bodySmall, color = onSurface.copy(alpha = 0.6f))
         }
-        Switch(checked, onChange, colors = SwitchDefaults.colors(checkedTrackColor = Violet))
+        Switch(checked, onChange, colors = SwitchDefaults.colors(checkedTrackColor = Violet, checkedThumbColor = OnAccent))
     }
 }

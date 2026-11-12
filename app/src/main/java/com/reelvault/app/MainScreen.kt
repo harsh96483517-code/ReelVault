@@ -97,6 +97,24 @@ fun MainScreen(vm: MainVm) {
         }
     }
 
+    // multi-select (long-press a video) + hidden vault
+    val selected = remember { mutableStateListOf<String>() }
+    val toggle: (String) -> Unit = { u -> if (u in selected) selected.remove(u) else selected.add(u) }
+    var vault by remember { mutableStateOf(false) }
+    var vaultAuth by remember { mutableStateOf(false) }
+    LaunchedEffect(tab) { selected.clear() }
+    DisposableEffect(vault) {
+        AppLock.vaultOpen = vault
+        (ctx as? MainActivity)?.refreshSecure()
+        onDispose { AppLock.vaultOpen = false; (ctx as? MainActivity)?.refreshSecure() }
+    }
+    val openVault: () -> Unit = {
+        if (!AppLock.isSet) {
+            android.widget.Toast.makeText(ctx, "Set a pattern lock first to protect hidden videos.", android.widget.Toast.LENGTH_LONG).show()
+            settings = true
+        } else vaultAuth = true
+    }
+
     val homeGrid = rememberLazyGridState()
     val homeList = rememberLazyListState()
     val hazeState = remember { HazeState() }
@@ -105,9 +123,14 @@ fun MainScreen(vm: MainVm) {
 
     when {
         req != null -> ReelsScreen(vm, req!!) { req = null }
+        vaultAuth -> UnlockPanel("Hidden vault", "Verify it's you", onSuccess = { vaultAuth = false; vault = true }, onCancel = { vaultAuth = false })
+        vault -> VaultScreen(vm, onBack = { vault = false }, onPlay = { req = it })
         settings -> SettingsScreen(vm) { settings = false }
         else -> {
-            BackHandler(enabled = tab != 0 || search) { if (search) { search = false; vm.query.value = "" } else tab = 0 }
+            BackHandler(enabled = selected.isNotEmpty() || tab != 0 || search) {
+                if (selected.isNotEmpty()) selected.clear()
+                else if (search) { search = false; vm.query.value = "" } else tab = 0
+            }
             val topPad = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 80.dp
             val bottomPad = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 110.dp
 
@@ -118,15 +141,26 @@ fun MainScreen(vm: MainVm) {
                       CompositionLocalProvider(LocalHaze provides null) {
                         AppBackground()
                         when (tab) {
-                            0 -> HomeScreen(vm, perm, { askPerm() }, search, topPad, bottomPad, homeGrid, homeList) { uris, i -> req = PlayRequest(uris, i) }
+                            0 -> HomeScreen(vm, perm, { askPerm() }, search, topPad, bottomPad, homeGrid, homeList, selected, toggle) { uris, i -> req = PlayRequest(uris, i) }
                             1 -> LibraryScreen(vm, perm, { askPerm() }, topPad, bottomPad) { folder -> vm.folderFilter.value = folder; tab = 0 }
-                            2 -> FavoritesScreen(vm, topPad, bottomPad) { req = it }
-                            else -> ProfileScreen(vm, topPad, bottomPad) { settings = true }
+                            2 -> FavoritesScreen(vm, topPad, bottomPad, selected, toggle) { req = it }
+                            else -> ProfileScreen(vm, topPad, bottomPad, openVault) { settings = true }
                         }
                       }
                     }
-                    TopHeader(tab == 0, search, { search = !search; if (!search) vm.query.value = "" }, { settings = true },
+                    if (selected.isEmpty()) TopHeader(tab == 0, search, { search = !search; if (!search) vm.query.value = "" }, { settings = true },
                         Modifier.align(Alignment.TopCenter))
+                    else SelectionBar(
+                        selected.size, { selected.clear() },
+                        { val pool = if (tab == 2) vm.favorites.value else vm.visible.value; selected.clear(); selected.addAll(pool.map { it.uri }) },
+                        { vm.favoriteMany(selected.toList(), true); selected.clear() },
+                        {
+                            val n = selected.size
+                            vm.hide(selected.toList()); selected.clear()
+                            android.widget.Toast.makeText(ctx, "$n hidden. Find them in Profile > Hidden vault.", android.widget.Toast.LENGTH_LONG).show()
+                        },
+                        Modifier.align(Alignment.TopCenter),
+                    )
                     BottomBar(tab, { tab = it }, startReels, Modifier.align(Alignment.BottomCenter))
                 }
             }
@@ -154,6 +188,24 @@ private fun UpdateDialog(vm: MainVm, info: UpdateInfo, progress: Float?, status:
         },
         dismissButton = { androidx.compose.material3.TextButton({ vm.dismissUpdate() }, enabled = progress == null) { Text("Later") } },
     )
+}
+
+@Composable
+private fun SelectionBar(
+    count: Int, onClose: () -> Unit, onAll: () -> Unit, onFav: () -> Unit, onHide: () -> Unit, modifier: Modifier,
+) {
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    Row(
+        modifier.statusBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().height(60.dp)
+            .glass(RoundedCornerShape(30.dp)).padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        GlassIconButton(Icons.Rounded.Close, "Cancel", onClose, size = 42.dp)
+        Text("$count selected", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = onSurface)
+        GlassIconButton(Icons.Rounded.SelectAll, "Select all", onAll, size = 40.dp)
+        GlassIconButton(Icons.Rounded.FavoriteBorder, "Add to favorites", onFav, size = 40.dp)
+        GlassIconButton(Icons.Rounded.VisibilityOff, "Hide", onHide, size = 40.dp)
+    }
 }
 
 @Composable
@@ -188,23 +240,22 @@ private fun BottomBar(selected: Int, onSelect: (Int) -> Unit, onReels: () -> Uni
         val x by animateDpAsState(slotW * slot, spring(Spring.DampingRatioLowBouncy, Spring.StiffnessMediumLow), label = "lens")
         Box(
             Modifier.offset(x = x).width(slotW).fillMaxHeight().clip(RoundedCornerShape(28.dp))
-                .background(if (dark) Brush.linearGradient(listOf(Violet.copy(alpha = 0.50f), Blue.copy(alpha = 0.34f)))
-                            else Brush.linearGradient(listOf(Violet.copy(alpha = 0.16f), Violet.copy(alpha = 0.16f))))
-                .border(1.dp, if (dark) Color.White.copy(alpha = 0.35f) else Violet.copy(alpha = 0.35f), RoundedCornerShape(28.dp))
+                .background(if (dark) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.07f))
+                .border(1.dp, if (dark) Color.White.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.18f), RoundedCornerShape(28.dp))
         )
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
             for (i in 0..4) {
                 if (i == 2) {
                     Box(Modifier.weight(1f).fillMaxHeight().bounceClick(onClick = onReels), contentAlignment = Alignment.Center) {
                         Box(Modifier.size(50.dp).clip(CircleShape).background(AccentBrush), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Rounded.PlayArrow, "Play reels", tint = Color.White, modifier = Modifier.size(30.dp))
+                            Icon(Icons.Rounded.PlayArrow, "Play reels", tint = OnAccent, modifier = Modifier.size(30.dp))
                         }
                     }
                 } else {
                     val t = if (i > 2) i - 1 else i
                     val sel = t == selected
                     val grow by animateFloatAsState(if (sel) 1f else 0f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium), label = "tab")
-                    val c = if (sel) (if (dark) Color.White else Violet) else onSurface.copy(alpha = 0.72f)
+                    val c = if (sel) Violet else onSurface.copy(alpha = 0.72f)
                     Box(Modifier.weight(1f).fillMaxHeight().bounceClick { onSelect(t) }, contentAlignment = Alignment.Center) {
                         Icon(tabs[t].icon, tabs[t].label, tint = c, modifier = Modifier.size(27.dp).scale(1f + 0.15f * grow))
                     }

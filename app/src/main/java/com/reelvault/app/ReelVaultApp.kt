@@ -13,6 +13,7 @@ class ReelVaultApp : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        AppLock.init(this)
         SafeMode.on = getSharedPreferences("rv", MODE_PRIVATE).getBoolean("safe", false)
         // Save any crash so the next launch can show it (no PC / logcat needed).
         val previous = Thread.getDefaultUncaughtExceptionHandler()

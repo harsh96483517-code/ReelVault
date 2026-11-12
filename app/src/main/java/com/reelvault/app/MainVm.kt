@@ -25,7 +25,13 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     private val scanner = Scanner(app, db)
 
     val prefs: StateFlow<Prefs> = repo.prefs.stateIn(viewModelScope, SharingStarted.Eagerly, Prefs())
-    val all: StateFlow<List<VideoEntity>> = dao.observeAll().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    /** Every row, including hidden ones (only the player and the Hidden vault use this). */
+    val allRaw: StateFlow<List<VideoEntity>> = dao.observeAll().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    /** Visible videos: hidden ones never appear in Home, Library, Favorites, search, stats or random reels. */
+    val all: StateFlow<List<VideoEntity>> = allRaw.map { l -> l.filter { !it.hidden } }
+        .flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val hidden: StateFlow<List<VideoEntity>> = allRaw.map { l -> l.filter { it.hidden }.sortedByDescending { it.dateAdded } }
+        .flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val query = MutableStateFlow("")
     val folderFilter = MutableStateFlow<String?>(null)
@@ -105,13 +111,16 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     fun setPref(block: (MutablePreferences) -> Unit) { viewModelScope.launch { repo.edit(block) } }
 
-    fun toggleFavorite(uri: String) = io { all.value.firstOrNull { it.uri == uri }?.let { dao.setFavorite(uri, !it.favorite) } }
-    fun toggleLike(uri: String) = io { all.value.firstOrNull { it.uri == uri }?.let { dao.setLiked(uri, !it.liked) } }
+    fun toggleFavorite(uri: String) = io { allRaw.value.firstOrNull { it.uri == uri }?.let { dao.setFavorite(uri, !it.favorite) } }
+    fun toggleLike(uri: String) = io { allRaw.value.firstOrNull { it.uri == uri }?.let { dao.setLiked(uri, !it.liked) } }
     fun like(uri: String) = io { dao.setLiked(uri, true) }
     fun setCaption(uri: String, c: String) = io { dao.setCaption(uri, c.trim()) }
     fun savePosition(uri: String, pos: Long, dur: Long) = io {
         dao.setPosition(uri, if (dur > 0 && pos > dur - 2000) 0 else pos.coerceAtLeast(0))
     }
+    fun hide(uris: List<String>) = io { uris.chunked(500).forEach { dao.setHidden(it, true) } }
+    fun unhide(uris: List<String>) = io { uris.chunked(500).forEach { dao.setHidden(it, false) } }
+    fun favoriteMany(uris: List<String>, v: Boolean) = io { uris.chunked(500).forEach { dao.setFavoriteMany(it, v) } }
     fun setLast(uri: String) { setPref { it[K.last] = uri } }
 
     fun addFolder(uri: Uri) {

@@ -82,6 +82,7 @@ object Updater {
 
     /** Returns false if the user first has to allow "install unknown apps" for ReelVault. */
     fun install(ctx: Context, apk: File): Boolean {
+        AppLock.bypass()
         if (Build.VERSION.SDK_INT >= 26 && !ctx.packageManager.canRequestPackageInstalls()) {
             ctx.startActivity(
                 Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${ctx.packageName}"))

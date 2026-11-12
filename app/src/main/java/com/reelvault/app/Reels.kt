@@ -96,11 +96,14 @@ fun ReelsScreen(vm: MainVm, req: PlayRequest, onClose: () -> Unit) {
     val activity = ctx as ComponentActivity
     val view = LocalView.current
     val prefs by vm.prefs.collectAsState()
-    val all by vm.all.collectAsState()
+    val all by vm.allRaw.collectAsState()
     val byUri = remember(all) { all.associateBy { it.uri } }
     val uris = req.uris
     if (uris.isEmpty()) { LaunchedEffect(Unit) { onClose() }; return }
     val scope = rememberCoroutineScope()
+    val prevDark = remember { Mono.dark }
+    Mono.dark = true
+    DisposableEffect(Unit) { onDispose { Mono.dark = prevDark } }
 
     val player = remember {
         ExoPlayer.Builder(ctx)
@@ -185,10 +188,12 @@ fun ReelsScreen(vm: MainVm, req: PlayRequest, onClose: () -> Unit) {
     BackHandler { if (st.full) st.full = false else onClose() }
 
     CompositionLocalProvider(LocalHaze provides null, LocalDark provides true) {
+        MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(onSurface = Color.White, surface = Color(0xFF1C1C1C), surfaceContainer = Color(0xFF1C1C1C))) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             VerticalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 0, key = { uris[it] }) { page ->
                 ReelPage(uris[page], byUri[uris[page]], page == pager.settledPage, st, vm, prefs, onClose)
             }
+        }
         }
     }
 }
@@ -247,7 +252,7 @@ private fun ReelPage(
         if (isCur) st.error?.let { msg ->
             Column(Modifier.align(Alignment.Center).padding(32.dp).glass(RoundedCornerShape(24.dp), true).padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(Icons.Rounded.ErrorOutline, null, tint = Pink, modifier = Modifier.size(36.dp))
+                Icon(Icons.Rounded.ErrorOutline, null, tint = Color.White, modifier = Modifier.size(36.dp))
                 Text(msg, color = Color.White, fontSize = 14.sp)
                 Text("Swipe up for the next video.", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
             }
@@ -257,7 +262,7 @@ private fun ReelPage(
             heart, Modifier.align(Alignment.Center),
             enter = scaleIn(spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow)) + fadeIn(),
             exit = fadeOut() + scaleOut(),
-        ) { Icon(Icons.Rounded.Favorite, null, tint = Pink, modifier = Modifier.size(120.dp)) }
+        ) { Icon(Icons.Rounded.Favorite, null, tint = Color.White, modifier = Modifier.size(120.dp)) }
 
         Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(horizontal = 14.dp, vertical = 10.dp)) {
             // Top bar
@@ -284,7 +289,7 @@ private fun ReelPage(
                     verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.VolumeUp, null, tint = Color.White, modifier = Modifier.size(20.dp))
                     Slider(st.volume, { st.volume = it; st.player.volume = it }, Modifier.weight(1f),
-                        colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Violet, inactiveTrackColor = Color.White.copy(alpha = 0.3f)))
+                        colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(alpha = 0.3f)))
                 }
             }
 
@@ -305,15 +310,15 @@ private fun ReelPage(
                     Column(horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         RailButton(if (e?.liked == true) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, "Like",
-                            if (e?.liked == true) Pink else Color.White) { vm.toggleLike(uri) }
+                            Color.White) { vm.toggleLike(uri) }
                         RailButton(if (e?.favorite == true) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder, "Save",
-                            if (e?.favorite == true) Color(0xFFB794FF) else Color.White) { vm.toggleFavorite(uri) }
+                            Color.White) { vm.toggleFavorite(uri) }
                         RailButton(Icons.Rounded.Share, "Share", Color.White) {
                             val i = Intent(Intent.ACTION_SEND).apply {
                                 type = "video/*"; putExtra(Intent.EXTRA_STREAM, uri.toUri())
                                 clipData = ClipData.newRawUri("", uri.toUri()); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             }
-                            ctx.startActivity(Intent.createChooser(i, "Share video"))
+                            AppLock.bypass(); ctx.startActivity(Intent.createChooser(i, "Share video"))
                         }
                         Box {
                             RailButton(Icons.Rounded.MoreVert, "More", Color.White) { moreMenu = true }
@@ -323,7 +328,7 @@ private fun ReelPage(
                                 DropdownMenuItem({ Text("Open with…") }, {
                                     moreMenu = false
                                     val i = Intent(Intent.ACTION_VIEW).apply { setDataAndType(uri.toUri(), "video/*"); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-                                    runCatching { ctx.startActivity(Intent.createChooser(i, "Open with")) }
+                                    AppLock.bypass(); runCatching { ctx.startActivity(Intent.createChooser(i, "Open with")) }
                                 }, leadingIcon = { Icon(Icons.Rounded.OpenInNew, null) })
                                 DropdownMenuItem({ Text(if (st.fill) "Fill screen: on" else "Fill screen: off") }, {
                                     st.fill = !st.fill; moreMenu = false
@@ -428,7 +433,7 @@ private fun WaveSeekBar(value: Float, animate: Boolean, onChange: (Float) -> Uni
             px += 3f
         }
         path.lineTo(x, cy)
-        drawPath(path, Brush.horizontalGradient(listOf(Violet, Blue), 0f, size.width.coerceAtLeast(1f)),
+        drawPath(path, Brush.horizontalGradient(listOf(Color.White, Color(0xFFBDBDBD)), 0f, size.width.coerceAtLeast(1f)),
             style = Stroke(stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
         // pill thumb
         drawRoundRect(Color.White, Offset(x - 2.5.dp.toPx(), cy - (if (dragging) 13.dp else 10.dp).toPx()),

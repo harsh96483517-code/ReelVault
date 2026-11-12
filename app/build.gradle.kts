@@ -74,4 +74,6 @@ dependencies {
     implementation("io.coil-kt:coil-video:2.7.0")
 
     implementation("dev.chrisbanes.haze:haze:1.0.2")
+    implementation("androidx.biometric:biometric:1.1.0")
+    implementation("androidx.fragment:fragment-ktx:1.8.5")
 }

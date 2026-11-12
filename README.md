@@ -57,3 +57,14 @@ The next launch shows the crash text on screen (Copy error / Retry in safe mode)
 ## Dock & Reels
 Bottom dock is icons only. The center ▶ button starts Reels directly; Settings ▸ Direct Reels button
 chooses Random or In order (continues from last played when "Remember last played" is on).
+
+
+## Hidden videos, app lock, black & white theme
+- Long-press any video (Home or Favorites) to select several. Top bar: select all, favorite, **hide**.
+  Hidden videos vanish from Home, Library counts, Favorites, search, stats and random Reels.
+  They live only in Profile ▸ Hidden vault (opens after pattern or fingerprint). Select there to Unhide.
+- Hiding is inside ReelVault only: the original files are not moved or changed, so phone Gallery / file managers can still show them.
+- Settings ▸ App lock: set a pattern (draw twice), optional fingerprint, auto-lock delay (instantly / 1 min / 5 min),
+  change or remove. 5 wrong patterns = 30 second wait. With a lock set, the "recent apps" preview is hidden and the vault blocks screenshots.
+- The whole UI is black & white (dark = black with white accents, light = clean white cards with black accents).
+- Database upgraded to v2 (adds `hidden`); existing favorites and positions are kept.

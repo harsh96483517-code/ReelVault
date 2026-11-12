@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
@@ -19,6 +20,8 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
@@ -37,6 +40,7 @@ data class VideoEntity(
     val liked: Boolean = false,
     val caption: String = "",
     val positionMs: Long = 0,
+    @ColumnInfo(defaultValue = "0") val hidden: Boolean = false,
 )
 
 @Dao
@@ -51,9 +55,11 @@ interface VideoDao {
     @Query("UPDATE videos SET liked=:v WHERE uri=:uri") suspend fun setLiked(uri: String, v: Boolean)
     @Query("UPDATE videos SET caption=:c WHERE uri=:uri") suspend fun setCaption(uri: String, c: String)
     @Query("UPDATE videos SET positionMs=:p WHERE uri=:uri") suspend fun setPosition(uri: String, p: Long)
+    @Query("UPDATE videos SET hidden=:h WHERE uri IN (:uris)") suspend fun setHidden(uris: List<String>, h: Boolean)
+    @Query("UPDATE videos SET favorite=:v WHERE uri IN (:uris)") suspend fun setFavoriteMany(uris: List<String>, v: Boolean)
 }
 
-@Database(entities = [VideoEntity::class], version = 1, exportSchema = false)
+@Database(entities = [VideoEntity::class], version = 2, exportSchema = false)
 abstract class AppDb : RoomDatabase() {
     abstract fun dao(): VideoDao
 
@@ -61,6 +67,11 @@ abstract class AppDb : RoomDatabase() {
         @Volatile private var instance: AppDb? = null
         fun get(c: Context): AppDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(c.applicationContext, AppDb::class.java, "reelvault.db")
+                .addMigrations(object : Migration(1, 2) {
+                    override fun migrate(db: SupportSQLiteDatabase) {
+                        db.execSQL("ALTER TABLE videos ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0")
+                    }
+                })
                 .build().also { instance = it }
         }
     }

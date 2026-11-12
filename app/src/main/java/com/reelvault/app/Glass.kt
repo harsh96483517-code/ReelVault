@@ -4,7 +4,9 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -56,15 +58,15 @@ fun Modifier.glass(shape: Shape = RoundedCornerShape(24.dp), strong: Boolean = f
     val dark = LocalDark.current
     if (!dark) {
         // Light theme: simple, high-contrast white card (no blur) so everything is easy to read.
-        return this.shadow(if (strong) 8.dp else 1.5.dp, shape, ambientColor = Color(0x33201060), spotColor = Color(0x33201060))
-            .clip(shape).background(Color.White).border(1.dp, Color(0xFFDAD5EE), shape)
+        return this.shadow(if (strong) 8.dp else 1.5.dp, shape, ambientColor = Color(0x33000000), spotColor = Color(0x33000000))
+            .clip(shape).background(Color.White).border(1.dp, Color(0xFFDDDDDD), shape)
     }
     val haze = LocalHaze.current
     val fill = if (dark) Color.White.copy(alpha = if (strong) 0.16f else 0.10f)
     else Color.White.copy(alpha = if (strong) 0.62f else 0.45f)
     val base = if (haze != null)
         this.hazeChild(state = haze, shape = shape, style = HazeStyle(
-            backgroundColor = if (dark) Color(0xFF07050F) else Color(0xFFF3F0FF),
+            backgroundColor = Color.Black,
             tint = HazeTint(fill), blurRadius = 28.dp, noiseFactor = 0.03f,
         ))
     else this.clip(shape)
@@ -91,9 +93,6 @@ fun Modifier.glass(shape: Shape = RoundedCornerShape(24.dp), strong: Boolean = f
             outline,
             Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.22f else 0.5f), 0.28f to Color.Transparent, startY = 0f, endY = h),
         )
-        // chromatic dispersion
-        translate(left = 1.1f, top = 1.1f) { drawOutline(outline, Pink.copy(alpha = 0.30f), style = Stroke(rim)) }
-        translate(left = -1.1f, top = -1.1f) { drawOutline(outline, Color(0xFF38E8FF).copy(alpha = 0.30f), style = Stroke(rim)) }
         // specular rim
         drawOutline(
             outline,
@@ -110,7 +109,8 @@ fun Modifier.glass(shape: Shape = RoundedCornerShape(24.dp), strong: Boolean = f
 }
 
 /** Jelly press: x and y springs differ, so the glass squishes and wobbles back like liquid. */
-fun Modifier.bounceClick(enabled: Boolean = true, onClick: () -> Unit): Modifier = composed {
+@OptIn(ExperimentalFoundationApi::class)
+fun Modifier.bounceClick(enabled: Boolean = true, onLongClick: (() -> Unit)? = null, onClick: () -> Unit): Modifier = composed {
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
     val sx by animateFloatAsState(
@@ -119,18 +119,19 @@ fun Modifier.bounceClick(enabled: Boolean = true, onClick: () -> Unit): Modifier
     val sy by animateFloatAsState(
         if (pressed) 0.88f else 1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow), label = "sy"
     )
-    this.graphicsLayer { scaleX = sx; scaleY = sy }.clickable(src, null, enabled, onClick = onClick)
+    this.graphicsLayer { scaleX = sx; scaleY = sy }
+        .combinedClickable(interactionSource = src, indication = null, enabled = enabled, onLongClick = onLongClick, onClick = onClick)
 }
 
 @Composable
 fun AppBackground() {
     val dark = LocalDark.current
-    if (!dark) { Box(Modifier.fillMaxSize().background(Color(0xFFF4F3FA))); return }
+    if (!dark) { Box(Modifier.fillMaxSize().background(Color(0xFFF2F2F2))); return }
     Box(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).drawBehind {
-            drawRect(Brush.radialGradient(listOf(Violet.copy(alpha = 0.50f), Color.Transparent),
+            drawRect(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.11f), Color.Transparent),
                 center = Offset(size.width * 0.05f, size.height * 0.04f), radius = size.width * 1.0f))
-            drawRect(Brush.radialGradient(listOf(Blue.copy(alpha = 0.40f), Color.Transparent),
+            drawRect(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.07f), Color.Transparent),
                 center = Offset(size.width * 0.98f, size.height * 0.92f), radius = size.width * 1.1f))
         }
     )
@@ -155,7 +156,7 @@ fun GlassIconButton(
 @Composable
 fun GlassChip(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, icon: ImageVector? = null, selected: Boolean = false) {
     val shape = RoundedCornerShape(50)
-    val content = if (selected) Color.White else MaterialTheme.colorScheme.onSurface
+    val content = if (selected) OnAccent else MaterialTheme.colorScheme.onSurface
     Row(
         modifier.bounceClick(onClick = onClick).height(38.dp)
             .then(if (selected) Modifier.clip(shape).background(AccentBrush) else Modifier.glass(shape))
@@ -174,8 +175,8 @@ fun GradientButton(text: String, icon: ImageVector, onClick: () -> Unit, modifie
             .padding(horizontal = 18.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
     ) {
-        Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
-        Text(text, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        Icon(icon, null, tint = OnAccent, modifier = Modifier.size(20.dp))
+        Text(text, color = OnAccent, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
     }
 }
 
