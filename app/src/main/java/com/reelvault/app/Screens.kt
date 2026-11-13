@@ -1,6 +1,10 @@
 package com.reelvault.app
 
 import android.net.Uri
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.border
+import android.content.Intent
+import android.content.ActivityNotFoundException
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -236,29 +240,73 @@ fun FavoritesScreen(vm: MainVm, topPad: Dp, bottomPad: Dp, selected: List<String
 }
 
 // ───────────────────────── PROFILE ─────────────────────────
+private fun openInstagram(ctx: android.content.Context, user: String) {
+    val u = user.trim().removePrefix("@")
+    AppLock.bypass()
+    val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse(if (u.isBlank()) "https://instagram.com" else "https://instagram.com/_u/$u"))
+        .setPackage("com.instagram.android").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    try { ctx.startActivity(appIntent) }
+    catch (e: ActivityNotFoundException) {
+        // Instagram app not installed: open the profile in the browser
+        runCatching {
+            ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(if (u.isBlank()) "https://instagram.com" else "https://www.instagram.com/$u/"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+    }
+}
+
 @Composable
 fun ProfileScreen(vm: MainVm, topPad: Dp, bottomPad: Dp, onVault: () -> Unit, onSettings: () -> Unit) {
     val prefs by vm.prefs.collectAsState()
     val hidden by vm.hidden.collectAsState()
     val all by vm.all.collectAsState()
+    val ctx = LocalContext.current
     val onSurface = MaterialTheme.colorScheme.onSurface
     var editing by remember { mutableStateOf(false) }
     val favCount = all.count { it.favorite }
     val likeCount = all.count { it.liked }
+    val bannerShape = RoundedCornerShape(30.dp)
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .padding(start = 20.dp, end = 20.dp, top = topPad, bottom = bottomPad),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Avatar(prefs.avatar, prefs.name, 104.dp)
+        // banner with the chrome wordmark, avatar overlapping its bottom edge
+        Box(Modifier.fillMaxWidth()) {
+            Box(
+                Modifier.fillMaxWidth().height(136.dp).clip(bannerShape)
+                    .background(Brush.verticalGradient(listOf(Color(0xFF2C2C2C), Color.Black)))
+                    .border(1.dp, Color.White.copy(alpha = 0.2f), bannerShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Wordmark(Modifier.height(74.dp).padding(bottom = 6.dp), dark = true)
+            }
+            Box(Modifier.align(Alignment.BottomCenter).offset(y = 54.dp)) { Avatar(prefs.avatar, prefs.name, 108.dp) }
+        }
+        Spacer(Modifier.height(44.dp))
+
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(prefs.name.ifBlank { "Your name" }, style = MaterialTheme.typography.titleLarge, color = onSurface)
-            Text("@" + prefs.handle.ifBlank { "yourhandle" }, color = Violet, fontWeight = FontWeight.Medium)
-            if (prefs.bio.isNotBlank()) Text(prefs.bio, textAlign = TextAlign.Center, color = onSurface.copy(alpha = 0.75f),
-                modifier = Modifier.padding(top = 6.dp, start = 12.dp, end = 12.dp))
+            Text("@" + prefs.handle.ifBlank { "yourhandle" }, color = onSurface.copy(alpha = 0.7f), fontWeight = FontWeight.Medium)
+            if (prefs.bio.isNotBlank()) Text(prefs.bio, textAlign = TextAlign.Center, color = onSurface.copy(alpha = 0.8f),
+                modifier = Modifier.padding(top = 8.dp, start = 12.dp, end = 12.dp))
         }
-        GradientButton(if (prefs.name.isBlank()) "Create profile" else "Edit profile", Icons.Rounded.Edit, { editing = true })
+
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            GradientButton(if (prefs.name.isBlank()) "Create profile" else "Edit profile", Icons.Rounded.Edit, { editing = true })
+            val ig = prefs.instagram
+            Row(
+                Modifier.bounceClick { if (ig.isBlank()) editing = true else openInstagram(ctx, ig) }.height(48.dp)
+                    .glass(RoundedCornerShape(16.dp)).padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(Icons.Rounded.OpenInNew, null, tint = onSurface, modifier = Modifier.size(18.dp))
+                Text(if (ig.isBlank()) "Add Instagram" else "@$ig", color = onSurface, fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 150.dp))
+            }
+        }
+
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Stat("Videos", "${all.size}", Modifier.weight(1f))
             Stat("Favorites", "$favCount", Modifier.weight(1f))
@@ -293,7 +341,7 @@ fun ProfileScreen(vm: MainVm, topPad: Dp, bottomPad: Dp, onVault: () -> Unit, on
             Icon(Icons.Rounded.ChevronRight, null, tint = onSurface.copy(alpha = 0.5f))
         }
     }
-    if (editing) EditProfileDialog(prefs, { editing = false }) { n, h, b, a -> vm.saveProfile(n, h, b, a); editing = false }
+    if (editing) EditProfileDialog(prefs, { editing = false }) { n, h, b, ig, a -> vm.saveProfile(n, h, b, ig, a); editing = false }
 }
 
 @Composable
@@ -305,10 +353,11 @@ private fun Stat(label: String, value: String, modifier: Modifier) {
 }
 
 @Composable
-private fun EditProfileDialog(prefs: Prefs, onDismiss: () -> Unit, onSave: (String, String, String, Uri?) -> Unit) {
+private fun EditProfileDialog(prefs: Prefs, onDismiss: () -> Unit, onSave: (String, String, String, String, Uri?) -> Unit) {
     var name by remember { mutableStateOf(prefs.name) }
     var handle by remember { mutableStateOf(prefs.handle) }
     var bio by remember { mutableStateOf(prefs.bio) }
+    var insta by remember { mutableStateOf(prefs.instagram) }
     var photo by remember { mutableStateOf<Uri?>(null) }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { if (it != null) photo = it }
     AlertDialog(
@@ -326,10 +375,12 @@ private fun EditProfileDialog(prefs: Prefs, onDismiss: () -> Unit, onSave: (Stri
                 }
                 OutlinedTextField(name, { name = it.take(30) }, label = { Text("Name") }, singleLine = true)
                 OutlinedTextField(handle, { handle = it.take(24) }, label = { Text("Username") }, prefix = { Text("@") }, singleLine = true)
+                OutlinedTextField(insta, { v -> insta = v.filter { c -> c.isLetterOrDigit() || c == '.' || c == '_' }.take(30) },
+                    label = { Text("Instagram username") }, prefix = { Text("@") }, singleLine = true)
                 OutlinedTextField(bio, { bio = it.take(120) }, label = { Text("Bio") }, maxLines = 3)
             }
         },
-        confirmButton = { TextButton({ onSave(name, handle, bio, photo) }) { Text("Save") } },
+        confirmButton = { TextButton({ onSave(name, handle, bio, insta, photo) }) { Text("Save") } },
         dismissButton = { TextButton(onDismiss) { Text("Cancel") } },
     )
 }

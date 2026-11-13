@@ -77,3 +77,12 @@ chooses Random or In order (continues from last played when "Remember last playe
 - Every pressable control squashes elastically and sends a water ripple from the touch point.
 - Tabs switch with a springy scale-in; the dock lens stretches like a water drop as it moves;
   videos glide into their new places with a bounce when you hide/unhide/sort.
+
+
+## Profile & Instagram
+- Header bar is always black with the white chrome "Reel" wordmark (both themes).
+- Profile: banner + overlapping avatar, name, @handle, bio, stats, vault and settings rows.
+- Edit profile has an "Instagram username" field. The profile shows an `@username` button that opens your Instagram profile
+  (Instagram app if installed, otherwise the browser). No Instagram login or API is used by ReelVault.
+- Videos you save from Instagram (e.g. your own reels via the reel's ⋯ > Download, or Settings > Your activity > Download your information)
+  land in your phone storage and ReelVault finds them on the next scan.

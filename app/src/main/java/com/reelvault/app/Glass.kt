@@ -182,14 +182,13 @@ fun AppBackground() {
 
 /** The "Reel" chrome wordmark (transparent PNG; inverted variant for the dark theme). */
 @Composable
-fun Wordmark(modifier: Modifier = Modifier) {
+fun Wordmark(modifier: Modifier = Modifier, dark: Boolean = Mono.dark) {
     Image(
-        painterResource(if (Mono.dark) R.drawable.wordmark_dark else R.drawable.wordmark_light), "Reel", modifier,
+        painterResource(if (dark) R.drawable.wordmark_dark else R.drawable.wordmark_light), "Reel", modifier,
         contentScale = ContentScale.Fit, alignment = Alignment.CenterStart,
     )
 }
 
-/** The square ReelVault mark: a light-theme and a dark-theme PNG, picked like the wordmark. */
 @Composable
 fun LogoMark(size: Dp) {
     Image(

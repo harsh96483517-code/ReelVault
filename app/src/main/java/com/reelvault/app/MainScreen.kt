@@ -227,15 +227,18 @@ private fun SelectionBar(
 
 @Composable
 private fun TopHeader(showSearch: Boolean, searchOn: Boolean, onSearch: () -> Unit, onSettings: () -> Unit, modifier: Modifier) {
-    val onSurface = MaterialTheme.colorScheme.onSurface
-    Row(
-        modifier.statusBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().height(60.dp)
-            .glass(RoundedCornerShape(30.dp)).padding(horizontal = 10.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Wordmark(Modifier.weight(1f).height(40.dp).padding(start = 8.dp))
-        if (showSearch) GlassIconButton(if (searchOn) Icons.Rounded.Close else Icons.Rounded.Search, "Search", onSearch, size = 40.dp)
-        GlassIconButton(Icons.Rounded.Settings, "Settings", onSettings, size = 40.dp)
+    val shape = RoundedCornerShape(30.dp)
+    // The logo bar is always black (both themes) so the chrome wordmark looks its best.
+    CompositionLocalProvider(LocalDark provides true, LocalHaze provides null) {
+        Row(
+            modifier.statusBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().height(60.dp)
+                .clip(shape).background(Color.Black).border(1.dp, Color.White.copy(alpha = 0.22f), shape).padding(horizontal = 10.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Wordmark(Modifier.weight(1f).height(40.dp).padding(start = 8.dp), dark = true)
+            if (showSearch) GlassIconButton(if (searchOn) Icons.Rounded.Close else Icons.Rounded.Search, "Search", onSearch, size = 40.dp, tint = Color.White)
+            GlassIconButton(Icons.Rounded.Settings, "Settings", onSettings, size = 40.dp, tint = Color.White)
+        }
     }
 }
 
