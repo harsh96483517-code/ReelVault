@@ -1,6 +1,8 @@
 package com.reelvault.app
 
 import android.content.Context
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -142,7 +144,9 @@ fun VideoGrid(
         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         itemsIndexed(list, key = { _, v -> v.uri }) { i, v ->
-            VideoCard(v, v.uri in selected, selected.isNotEmpty(), { onLong(v.uri) }) { onClick(i) }
+            Box(Modifier.animateItem(placementSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow))) {
+                VideoCard(v, v.uri in selected, selected.isNotEmpty(), { onLong(v.uri) }) { onClick(i) }
+            }
         }
     }
 }
@@ -157,7 +161,9 @@ fun VideoList(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = bottomPad),
     ) {
         itemsIndexed(list, key = { _, v -> v.uri }) { i, v ->
-            VideoRow(v, { onClick(i) }, { onFav(v.uri) }, v.uri in selected, selected.isNotEmpty(), { onLong(v.uri) })
+            Box(Modifier.animateItem(placementSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow))) {
+                VideoRow(v, { onClick(i) }, { onFav(v.uri) }, v.uri in selected, selected.isNotEmpty(), { onLong(v.uri) })
+            }
         }
     }
 }

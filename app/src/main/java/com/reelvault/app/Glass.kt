@@ -1,6 +1,18 @@
 package com.reelvault.app
 
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import kotlinx.coroutines.launch
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
@@ -108,18 +120,49 @@ fun Modifier.glass(shape: Shape = RoundedCornerShape(24.dp), strong: Boolean = f
     }
 }
 
-/** Jelly press: x and y springs differ, so the glass squishes and wobbles back like liquid. */
+/**
+ * Elastic "liquid" press: the glass squashes and wobbles back (x/y springs differ) and a water ripple
+ * spreads from the exact touch point, clipped to the control.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 fun Modifier.bounceClick(enabled: Boolean = true, onLongClick: (() -> Unit)? = null, onClick: () -> Unit): Modifier = composed {
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
     val sx by animateFloatAsState(
-        if (pressed) 0.93f else 1f, spring(Spring.DampingRatioHighBouncy, Spring.StiffnessMedium), label = "sx"
+        if (pressed) 0.92f else 1f, spring(Spring.DampingRatioHighBouncy, Spring.StiffnessMedium), label = "sx"
     )
     val sy by animateFloatAsState(
-        if (pressed) 0.88f else 1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow), label = "sy"
+        if (pressed) 0.86f else 1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow), label = "sy"
     )
-    this.graphicsLayer { scaleX = sx; scaleY = sy }
+    val scope = rememberCoroutineScope()
+    val ripple = remember { Animatable(1f) }
+    var origin by remember { mutableStateOf(Offset.Unspecified) }
+    val rc = if (Mono.dark) Color.White else Color.Black
+    val boost = if (Mono.dark) 1f else 0.7f
+    this
+        .pointerInput(Unit) {
+            awaitEachGesture {
+                val d = awaitFirstDown(requireUnconsumed = false)
+                origin = d.position
+                scope.launch { ripple.snapTo(0f); ripple.animateTo(1f, tween(720, easing = LinearOutSlowInEasing)) }
+            }
+        }
+        .graphicsLayer { scaleX = sx; scaleY = sy }
+        .drawWithContent {
+            drawContent()
+            val p = ripple.value
+            if (p < 1f && origin != Offset.Unspecified) {
+                val rad = minOf(size.minDimension / 2f, 26.dp.toPx())
+                val clip = Path().apply { addRoundRect(RoundRect(0f, 0f, size.width, size.height, CornerRadius(rad))) }
+                clipPath(clip) {
+                    val r = size.maxDimension * 0.85f * p
+                    val fade = 1f - p
+                    drawCircle(rc.copy(alpha = 0.16f * fade * boost), r, origin)
+                    drawCircle(rc.copy(alpha = 0.50f * fade * boost), r, origin, style = Stroke(2.5.dp.toPx() * fade + 0.5f))
+                    drawCircle(rc.copy(alpha = 0.22f * fade * boost), r * 0.62f, origin, style = Stroke(1.5.dp.toPx()))
+                }
+            }
+        }
         .combinedClickable(interactionSource = src, indication = null, enabled = enabled, onLongClick = onLongClick, onClick = onClick)
 }
 
@@ -134,6 +177,15 @@ fun AppBackground() {
             drawRect(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.07f), Color.Transparent),
                 center = Offset(size.width * 0.98f, size.height * 0.92f), radius = size.width * 1.1f))
         }
+    )
+}
+
+/** The "Reel" chrome wordmark (transparent PNG; inverted variant for the dark theme). */
+@Composable
+fun Wordmark(modifier: Modifier = Modifier) {
+    Image(
+        painterResource(if (Mono.dark) R.drawable.wordmark_dark else R.drawable.wordmark_light), "Reel", modifier,
+        contentScale = ContentScale.Fit, alignment = Alignment.CenterStart,
     )
 }
 

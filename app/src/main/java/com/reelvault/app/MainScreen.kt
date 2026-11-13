@@ -8,7 +8,14 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -140,11 +147,21 @@ fun MainScreen(vm: MainVm) {
                       // Content INSIDE the haze source must not use hazeChild itself (it would blur itself and crash).
                       CompositionLocalProvider(LocalHaze provides null) {
                         AppBackground()
-                        when (tab) {
-                            0 -> HomeScreen(vm, perm, { askPerm() }, search, topPad, bottomPad, homeGrid, homeList, selected, toggle) { uris, i -> req = PlayRequest(uris, i) }
-                            1 -> LibraryScreen(vm, perm, { askPerm() }, topPad, bottomPad) { folder -> vm.folderFilter.value = folder; tab = 0 }
-                            2 -> FavoritesScreen(vm, topPad, bottomPad, selected, toggle) { req = it }
-                            else -> ProfileScreen(vm, topPad, bottomPad, openVault) { settings = true }
+                        // elastic, water-like switch between tabs
+                        AnimatedContent(
+                            targetState = tab,
+                            transitionSpec = {
+                                (fadeIn(tween(220)) + scaleIn(initialScale = 0.92f, animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow)))
+                                    .togetherWith(fadeOut(tween(140)))
+                            },
+                            label = "tabs",
+                        ) { t ->
+                            when (t) {
+                                0 -> HomeScreen(vm, perm, { askPerm() }, search, topPad, bottomPad, homeGrid, homeList, selected, toggle) { uris, i -> req = PlayRequest(uris, i) }
+                                1 -> LibraryScreen(vm, perm, { askPerm() }, topPad, bottomPad) { folder -> vm.folderFilter.value = folder; tab = 0 }
+                                2 -> FavoritesScreen(vm, topPad, bottomPad, selected, toggle) { req = it }
+                                else -> ProfileScreen(vm, topPad, bottomPad, openVault) { settings = true }
+                            }
                         }
                       }
                     }
@@ -216,11 +233,7 @@ private fun TopHeader(showSearch: Boolean, searchOn: Boolean, onSearch: () -> Un
             .glass(RoundedCornerShape(30.dp)).padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        LogoMark(38.dp)
-        Column(Modifier.weight(1f)) {
-            Text("ReelVault", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = onSurface)
-            Text("Your Reels. Your Phone.", style = MaterialTheme.typography.bodySmall, color = onSurface.copy(alpha = 0.65f), maxLines = 1)
-        }
+        Wordmark(Modifier.weight(1f).height(40.dp).padding(start = 8.dp))
         if (showSearch) GlassIconButton(if (searchOn) Icons.Rounded.Close else Icons.Rounded.Search, "Search", onSearch, size = 40.dp)
         GlassIconButton(Icons.Rounded.Settings, "Settings", onSettings, size = 40.dp)
     }
@@ -237,9 +250,13 @@ private fun BottomBar(selected: Int, onSelect: (Int) -> Unit, onReels: () -> Uni
         val slotW = maxWidth / 5
         val slot = if (selected >= 2) selected + 1 else selected   // slot 2 is the Reels button
         // liquid lens that glides to the selected icon with a springy overshoot
-        val x by animateDpAsState(slotW * slot, spring(Spring.DampingRatioLowBouncy, Spring.StiffnessMediumLow), label = "lens")
+        val targetX = slotW * slot
+        val x by animateDpAsState(targetX, spring(Spring.DampingRatioLowBouncy, Spring.StiffnessMediumLow), label = "lens")
+        val stretch = (kotlin.math.abs((targetX - x).value) / slotW.value).coerceIn(0f, 1f)   // water-drop stretch while moving
         Box(
-            Modifier.offset(x = x).width(slotW).fillMaxHeight().clip(RoundedCornerShape(28.dp))
+            Modifier.offset(x = x).width(slotW).fillMaxHeight()
+                .graphicsLayer { scaleX = 1f + 0.40f * stretch; scaleY = 1f - 0.12f * stretch }
+                .clip(RoundedCornerShape(28.dp))
                 .background(if (dark) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.07f))
                 .border(1.dp, if (dark) Color.White.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.18f), RoundedCornerShape(28.dp))
         )

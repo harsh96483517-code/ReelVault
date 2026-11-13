@@ -68,3 +68,12 @@ chooses Random or In order (continues from last played when "Remember last playe
   change or remove. 5 wrong patterns = 30 second wait. With a lock set, the "recent apps" preview is hidden and the vault blocks screenshots.
 - The whole UI is black & white (dark = black with white accents, light = clean white cards with black accents).
 - Database upgraded to v2 (adds `hidden`); existing favorites and positions are kept.
+
+
+## Logo & liquid-water feel
+- App icon (outer) = your full "Reel" logo on white; in-app header (inner) = the "Reel" chrome wordmark only (no text).
+  The wordmark has a dark-theme variant (inverted) so it stays visible on black.
+  Files: `res/drawable-nodpi/wordmark_light.png`, `wordmark_dark.png`, `logo_app.png`, `ic_launcher_foreground.png`.
+- Every pressable control squashes elastically and sends a water ripple from the touch point.
+- Tabs switch with a springy scale-in; the dock lens stretches like a water drop as it moves;
+  videos glide into their new places with a bounce when you hide/unhide/sort.
