@@ -189,9 +189,13 @@ fun Wordmark(modifier: Modifier = Modifier) {
     )
 }
 
+/** The square ReelVault mark: a light-theme and a dark-theme PNG, picked like the wordmark. */
 @Composable
 fun LogoMark(size: Dp) {
-    Image(painterResource(R.drawable.logo_app), "ReelVault", Modifier.size(size).clip(RoundedCornerShape(size * 0.235f)))
+    Image(
+        painterResource(if (Mono.dark) R.drawable.logo_mark_dark else R.drawable.logo_mark_light),
+        "ReelVault", Modifier.size(size).clip(RoundedCornerShape(size * 0.235f)),
+    )
 }
 
 @Composable
