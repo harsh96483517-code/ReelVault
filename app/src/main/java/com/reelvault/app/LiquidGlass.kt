@@ -39,18 +39,9 @@ internal val LocalGlassExport = compositionLocalOf<LayerBackdrop?> { null }
 /** The backdrop blur pipeline needs RenderEffect on a RenderNode: Android 12 (API 31)+. */
 fun isGlassSupported(sdkInt: Int = Build.VERSION.SDK_INT): Boolean = sdkInt >= Build.VERSION_CODES.S && !SafeMode.on
 
-/**
- * Liquid glass (the backdrop lens) is switched off for now.
- *
- * The lens effect threw "Size is unspecified" from Lens.getCornerRadii while the node was attaching,
- * which crashed the app on launch. Everything therefore falls back to the haze-based Modifier.glass(),
- * which is the older frosted look. Flip this back to true to try the backdrop pipeline again.
- */
-fun useLiquidGlass(): Boolean = false
-
 /** True when a liquid glass surface can actually be drawn here. */
 @Composable
-fun glassAvailable(): Boolean = useLiquidGlass() && isGlassSupported() && LocalAppBackdrop.current != null
+fun glassAvailable(): Boolean = isGlassSupported() && LocalAppBackdrop.current != null
 
 private const val VIBRANCY = 1f
 private const val BLUR_RADIUS_DP = 8f

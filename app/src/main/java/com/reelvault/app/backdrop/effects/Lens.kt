@@ -12,7 +12,7 @@ package com.reelvault.app.backdrop.effects
 import androidx.annotation.FloatRange
 import androidx.compose.foundation.shape.AbsoluteRoundedCornerShape
 import androidx.compose.foundation.shape.CornerBasedShape
-import androidx.compose.ui.geometry.isSpecified
+import androidx.compose.ui.geometry.isUnspecified
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.util.fastCoerceAtLeast
 import androidx.compose.ui.util.fastCoerceAtMost
@@ -30,6 +30,9 @@ fun BackdropEffectScope.lens(
 ) {
     if (!isRuntimeShaderSupported()) return
     if (refractionHeight <= 0f || refractionAmount <= 0f) return
+    // Size is unknown until the first draw (this runs on attach, before layout). Effects are re-applied
+    // once the size is set, so just skip for now.
+    if (size.isUnspecified) return
 
     if (padding > 0f) {
         padding = (padding - refractionHeight).fastCoerceAtLeast(0f)
@@ -72,8 +75,7 @@ fun BackdropEffectScope.lens(
 // dropped so the vendored sources have no external dependency; this app only passes
 // CornerBasedShape here.
 private val BackdropEffectScope.cornerRadii: FloatArray?
-    // The effect can run before the node is measured; Size.minDimension throws on Size.Unspecified.
-    get() = if (!size.isSpecified) null else when (val shape = shape) {
+    get() = when (val shape = shape) {
         is AbsoluteRoundedCornerShape -> {
             val size = size
             val maxRadius = size.minDimension / 2f

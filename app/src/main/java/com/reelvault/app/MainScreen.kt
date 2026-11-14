@@ -184,7 +184,7 @@ fun MainScreen(vm: MainVm) {
 
             // Liquid glass (dock, header, selection bar) samples this recording of the page. It is painted over the
             // window colour first so the glass has something opaque to blur in light AND dark theme.
-            val glassSupported = useLiquidGlass() && isGlassSupported()
+            val glassSupported = isGlassSupported()
             val windowBg = MaterialTheme.colorScheme.background
             val paintBackdrop: ContentDrawScope.() -> Unit = remember(windowBg) { { drawRect(windowBg); drawContent() } }
             val appBackdrop = rememberLayerBackdrop(onDraw = paintBackdrop)

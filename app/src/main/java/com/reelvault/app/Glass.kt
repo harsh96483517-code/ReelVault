@@ -77,13 +77,12 @@ fun Modifier.glass(shape: Shape = RoundedCornerShape(24.dp), strong: Boolean = f
             .clip(shape).background(Color.White).border(1.dp, Color(0xFFDDDDDD), shape)
     }
     val haze = LocalHaze.current
-    // Older frosted look: a light white wash over the blurred page instead of a heavy black slab.
-    val wash = Color.White.copy(alpha = if (strong) 0.18f else 0.12f)
+    val smoke = Color.Black.copy(alpha = if (strong) 0.58f else 0.42f)
     val base = if (haze != null)
         this.hazeChild(state = haze, shape = shape, style = HazeStyle(
-            backgroundColor = Color.Black, tint = HazeTint(wash), blurRadius = 28.dp, noiseFactor = 0.04f,
+            backgroundColor = Color.Black, tint = HazeTint(smoke), blurRadius = 30.dp, noiseFactor = 0.04f,
         ))
-    else this.clip(shape).background(wash)
+    else this.clip(shape).background(smoke)
     return base.drawWithContent {
         drawContent()
         val outline = shape.createOutline(size, layoutDirection, this)
