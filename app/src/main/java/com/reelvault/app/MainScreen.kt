@@ -9,6 +9,22 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+import kotlin.math.abs
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.graphics.drawscope.inset
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -252,35 +268,108 @@ private fun TopHeader(showSearch: Boolean, searchOn: Boolean, onSearch: () -> Un
                 .clip(shape).background(Color.Black).border(1.dp, Color.White.copy(alpha = 0.22f), shape).padding(horizontal = 10.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Wordmark(Modifier.weight(1f).height(40.dp).padding(start = 8.dp), dark = true)
+            Wordmark(Modifier.weight(1f).height(44.dp).padding(start = 8.dp), dark = Mono.dark)
             if (showSearch) GlassIconButton(if (searchOn) Icons.Rounded.Close else Icons.Rounded.Search, "Search", onSearch, size = 40.dp, tint = Color.White)
             GlassIconButton(Icons.Rounded.Settings, "Settings", onSettings, size = 40.dp, tint = Color.White)
         }
     }
 }
 
+/**
+ * Icon dock with a draggable liquid-glass lens. Drag the lens along the dock (or tap an icon): it follows the
+ * finger, stretches like a water drop, magnifies the icons under it and springs into place on release.
+ * The centre ▶ button plays reels directly.
+ */
 @Composable
 private fun BottomBar(selected: Int, onSelect: (Int) -> Unit, onReels: () -> Unit, modifier: Modifier) {
     val dark = LocalDark.current
     val onSurface = MaterialTheme.colorScheme.onSurface
+    val haptic = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    val pad = with(LocalDensity.current) { 6.dp.toPx() }
     BoxWithConstraints(
-        modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp).fillMaxWidth().height(68.dp)
-            .glass(RoundedCornerShape(34.dp), strong = true).padding(6.dp),
+        modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp).fillMaxWidth().height(68.dp),
     ) {
-        val slotW = maxWidth / 5
-        val slot = if (selected >= 2) selected + 1 else selected   // slot 2 is the Reels button
-        // liquid lens that glides to the selected icon with a springy overshoot
-        val targetX = slotW * slot
-        val x by animateDpAsState(targetX, spring(Spring.DampingRatioLowBouncy, Spring.StiffnessMediumLow), label = "lens")
-        val stretch = (kotlin.math.abs((targetX - x).value) / slotW.value).coerceIn(0f, 1f)   // water-drop stretch while moving
+        val slotPx = (constraints.maxWidth - 2 * pad) / 5f
+        fun slotOf(t: Int) = if (t >= 2) t + 1 else t
+        fun tabOf(s: Int) = if (s > 2) s - 1 else s
+        val lens = remember { Animatable(0f) }
+        var dragging by remember { mutableStateOf(false) }
+        var placed by remember { mutableStateOf(false) }
+        var dragX by remember { mutableFloatStateOf(0f) }
+        val springSpec = spring<Float>(Spring.DampingRatioLowBouncy, Spring.StiffnessMediumLow)
+
+        LaunchedEffect(selected, slotPx) {
+            if (dragging) return@LaunchedEffect
+            val target = slotPx * slotOf(selected)
+            if (!placed) { lens.snapTo(target); placed = true } else lens.animateTo(target, springSpec)
+        }
+        fun settle() {
+            val pos = lens.value / slotPx
+            val raw = pos.roundToInt().coerceIn(0, 4)
+            val s = if (raw == 2) (if (pos < 2f) 1 else 3) else raw     // the lens never rests on the ▶ button
+            dragging = false
+            if (tabOf(s) != selected) onSelect(tabOf(s))
+            scope.launch { lens.animateTo(slotPx * s, springSpec) }
+        }
+
+        // dock body
+        Box(Modifier.fillMaxSize().glass(RoundedCornerShape(34.dp), strong = true))
+
+        // the liquid-glass lens (bigger than the dock, so it bulges out of it)
+        val lensScale by animateFloatAsState(if (dragging) 1.10f else 1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow), label = "lensScale")
+        val restPx = slotPx * slotOf(selected)
         Box(
-            Modifier.offset(x = x).width(slotW).fillMaxHeight()
-                .graphicsLayer { scaleX = 1f + 0.40f * stretch; scaleY = 1f - 0.12f * stretch }
-                .clip(RoundedCornerShape(28.dp))
-                .background(if (dark) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.07f))
-                .border(1.dp, if (dark) Color.White.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.18f), RoundedCornerShape(28.dp))
+            Modifier
+                .layout { m, _ ->
+                    val w = (slotPx + 10.dp.toPx()).roundToInt()
+                    val h = 78.dp.toPx().roundToInt()
+                    val p = m.measure(Constraints.fixed(w, h))
+                    layout(0, 0) { p.place((pad + lens.value - 5.dp.toPx()).roundToInt(), (-5.dp.toPx()).roundToInt()) }
+                }
+                .graphicsLayer {
+                    val stretch = (abs(lens.value - restPx) / slotPx).coerceIn(0f, 1f)
+                    scaleX = (1f + 0.30f * stretch) * lensScale
+                    scaleY = (1f - 0.10f * stretch) * lensScale
+                }
+                .drawWithContent {
+                    drawContent()
+                    val r = CornerRadius(size.height / 2f)
+                    val ink = if (dark) Color.White else Color.Black
+                    val k = if (dark) 1f else 0.8f
+                    drawRoundRect(ink.copy(alpha = 0.10f * k), cornerRadius = r)                                   // clear body
+                    drawRoundRect(Brush.verticalGradient(0f to ink.copy(alpha = 0.22f * k), 0.5f to Color.Transparent), cornerRadius = r)   // sheen
+                    drawRoundRect(Brush.verticalGradient(0.70f to Color.Transparent, 1f to ink.copy(alpha = 0.14f * k)), cornerRadius = r) // caustic
+                    inset(3.dp.toPx()) {
+                        drawRoundRect(ink.copy(alpha = 0.18f * k), cornerRadius = CornerRadius(size.height / 2f), style = Stroke(1.dp.toPx()))
+                    }
+                    drawRoundRect(                                                                              // specular rim
+                        Brush.linearGradient(
+                            0f to ink.copy(alpha = 0.90f * k), 0.35f to ink.copy(alpha = 0.10f * k),
+                            0.70f to ink.copy(alpha = 0.08f * k), 1f to ink.copy(alpha = 0.60f * k),
+                            start = Offset.Zero, end = Offset(size.width, size.height)),
+                        cornerRadius = r, style = Stroke(1.6.dp.toPx()),
+                    )
+                }
         )
-        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+
+        // icons (+ drag handling for the whole dock)
+        Row(
+            Modifier.fillMaxSize().padding(6.dp).pointerInput(slotPx) {
+                detectHorizontalDragGestures(
+                    onDragStart = { dragging = true; dragX = lens.value },
+                    onDragEnd = { settle() },
+                    onDragCancel = { settle() },
+                ) { change, dx ->
+                    change.consume()
+                    val before = (dragX / slotPx).roundToInt()
+                    dragX = (dragX + dx).coerceIn(0f, slotPx * 4)
+                    if ((dragX / slotPx).roundToInt() != before) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    scope.launch { lens.snapTo(dragX) }
+                }
+            },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             for (i in 0..4) {
                 if (i == 2) {
                     Box(Modifier.weight(1f).fillMaxHeight().bounceClick(onClick = onReels), contentAlignment = Alignment.Center) {
@@ -289,12 +378,17 @@ private fun BottomBar(selected: Int, onSelect: (Int) -> Unit, onReels: () -> Uni
                         }
                     }
                 } else {
-                    val t = if (i > 2) i - 1 else i
-                    val sel = t == selected
-                    val grow by animateFloatAsState(if (sel) 1f else 0f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium), label = "tab")
-                    val c = if (sel) Violet else onSurface.copy(alpha = 0.72f)
+                    val t = tabOf(i)
+                    val c = if (t == selected) Violet else onSurface.copy(alpha = 0.72f)
                     Box(Modifier.weight(1f).fillMaxHeight().bounceClick { onSelect(t) }, contentAlignment = Alignment.Center) {
-                        Icon(tabs[t].icon, tabs[t].label, tint = c, modifier = Modifier.size(27.dp).scale(1f + 0.15f * grow))
+                        Icon(
+                            tabs[t].icon, tabs[t].label, tint = c,
+                            modifier = Modifier.size(27.dp).graphicsLayer {
+                                val d = abs(i * slotPx - lens.value) / slotPx
+                                val sc = 1f + 0.28f * (1f - d).coerceIn(0f, 1f)      // icons under the lens get magnified
+                                scaleX = sc; scaleY = sc
+                            },
+                        )
                     }
                 }
             }

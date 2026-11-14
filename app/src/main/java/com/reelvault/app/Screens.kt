@@ -91,7 +91,7 @@ fun HomeScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box {
                     GlassChip(sortNames[prefs.sort], { sortMenu = true }, icon = Icons.Rounded.Sort)
-                    DropdownMenu(sortMenu, { sortMenu = false }) {
+                    GlassMenu(sortMenu, { sortMenu = false }) {
                         sortNames.forEachIndexed { i, n ->
                             DropdownMenuItem(text = { Text(n) }, onClick = { vm.setPref { it[K.sort] = i }; sortMenu = false })
                         }
@@ -293,7 +293,7 @@ fun ProfileScreen(vm: MainVm, topPad: Dp, bottomPad: Dp, onVault: () -> Unit, on
                     .border(1.dp, Color.White.copy(alpha = 0.2f), bannerShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Wordmark(Modifier.height(74.dp).padding(bottom = 6.dp), dark = true)
+                Wordmark(Modifier.height(74.dp).padding(bottom = 6.dp), dark = Mono.dark)
             }
             Box(Modifier.align(Alignment.BottomCenter).offset(y = 54.dp)) { Avatar(prefs.avatar, prefs.name, 108.dp) }
         }
@@ -414,6 +414,7 @@ fun SettingsScreen(vm: MainVm, onBack: () -> Unit) {
     when (flow) {
         "set" -> { PatternSetup({ flow = null; tick++ }, { flow = null }); return }
         "change" -> { UnlockPanel("Change pattern", "Draw your current pattern", { flow = "set" }, { flow = null }); return }
+        "credits" -> { CreditsScreen { flow = null }; return }
         "remove" -> { UnlockPanel("Remove lock", "Draw your pattern to confirm", { AppLock.clear(); flow = null; tick++ }, { flow = null }); return }
     }
 
@@ -524,6 +525,14 @@ fun SettingsScreen(vm: MainVm, onBack: () -> Unit) {
                             ctx.cacheDir.listFiles()?.forEach { runCatching { it.deleteRecursively() } }
                             cleared = true
                         }, icon = Icons.Rounded.Delete)
+                    }
+                    Row(
+                        Modifier.fillMaxWidth().bounceClick { flow = "credits" }.glass(RoundedCornerShape(20.dp)).padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Icon(Icons.Rounded.Info, null, tint = Violet)
+                        Text("App Credits", Modifier.weight(1f), color = onSurface, fontWeight = FontWeight.Medium)
+                        Icon(Icons.Rounded.ChevronRight, null, tint = onSurface.copy(alpha = 0.5f))
                     }
                     Text("ReelVault • plays offline • no ads • no login", Modifier.fillMaxWidth(),
                         textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall, color = onSurface.copy(alpha = 0.5f))

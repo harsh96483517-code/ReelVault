@@ -96,3 +96,9 @@ chooses Random or In order (continues from last played when "Remember last playe
   so ReelVault has write access).
 - Dark theme and everything over video now uses black liquid glass: smoked body, top highlight, bottom caustic,
   inner edge ring, specular rim and glint. Light theme stays clean white cards.
+
+
+## Dock lens, glass menus, credits
+- Dock: drag the liquid-glass lens left/right (or tap an icon). It stretches like water, magnifies the icons under it and springs into place.
+- All popup menus (⋮ More, speed, sort) are liquid glass. The little white streak on glass edges was removed.
+- Logo: new "M" mark (app icon, header, lock screen). Settings > App Credits shows the developer card with photo.

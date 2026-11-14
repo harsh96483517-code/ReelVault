@@ -274,7 +274,7 @@ private fun ReelPage(
                 Text("ReelVault", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.weight(1f))
                 Box {
                     GlassChip("${st.speed}x".replace(".0x", "x"), { speedMenu = true }, icon = Icons.Rounded.Speed)
-                    DropdownMenu(speedMenu, { speedMenu = false }) {
+                    GlassMenu(speedMenu, { speedMenu = false }) {
                         listOf(0.5f, 1f, 1.5f, 2f).forEach { s ->
                             DropdownMenuItem(
                                 text = { Text("${s}x".replace(".0x", "x")) },
@@ -324,7 +324,7 @@ private fun ReelPage(
                         }
                         Box {
                             RailButton(Icons.Rounded.MoreVert, "More", Color.White) { moreMenu = true }
-                            DropdownMenu(moreMenu, { moreMenu = false }) {
+                            GlassMenu(moreMenu, { moreMenu = false }) {
                                 DropdownMenuItem({ Text("Edit caption") }, { moreMenu = false; editCaption = true }, leadingIcon = { Icon(Icons.Rounded.Edit, null) })
                                 DropdownMenuItem({ Text("Video info") }, { moreMenu = false; info = true }, leadingIcon = { Icon(Icons.Rounded.Info, null) })
                                 DropdownMenuItem({ Text("Open with…") }, {

@@ -27,6 +27,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -65,7 +66,7 @@ val LocalHaze = staticCompositionLocalOf<HazeState?> { null }
 /**
  * Black liquid glass (dark theme / over video). Smoked black body with real blur where a Haze source exists,
  * then layered detail: body depth gradient, top lens highlight, bottom caustic glow, an inner edge ring
- * (thickness), a specular rim and a bright glint. Light theme = clean solid white card.
+ * (thickness) and a specular rim. Light theme = clean solid white card.
  */
 @Composable
 fun Modifier.glass(shape: Shape = RoundedCornerShape(24.dp), strong: Boolean = false): Modifier {
@@ -107,10 +108,6 @@ fun Modifier.glass(shape: Shape = RoundedCornerShape(24.dp), strong: Boolean = f
         drawOutline(outline, Brush.linearGradient(
             0f to white.copy(alpha = 0.95f), 0.28f to white.copy(alpha = 0.12f), 0.72f to white.copy(alpha = 0.08f), 1f to white.copy(alpha = 0.55f),
             start = Offset(0f, 0f), end = Offset(w, h)), style = Stroke(1.6.dp.toPx()))
-        // 6. glint: short bright streak + dot on the top-left edge
-        val gy = 2.4.dp.toPx()
-        drawLine(white.copy(alpha = 0.85f), Offset(w * 0.30f, gy), Offset(w * 0.46f, gy), 1.6.dp.toPx(), StrokeCap.Round)
-        drawCircle(white.copy(alpha = 0.85f), 1.3.dp.toPx(), Offset(w * 0.52f, gy))
     }
 }
 
@@ -174,21 +171,30 @@ fun AppBackground() {
     )
 }
 
-/** The "Reel" chrome wordmark (transparent PNG; inverted variant for the dark theme). */
+/** The ReelVault "M" logo (white on transparent, made for black bars). */
 @Composable
 fun Wordmark(modifier: Modifier = Modifier, dark: Boolean = Mono.dark) {
     Image(
-        painterResource(if (dark) R.drawable.wordmark_dark else R.drawable.wordmark_light), "Reel", modifier,
+        painterResource(if (dark) R.drawable.logo_m else R.drawable.logo_m_light), "ReelVault", modifier,
         contentScale = ContentScale.Fit, alignment = Alignment.CenterStart,
+    )
+}
+
+/** Dropdown menu rendered as liquid glass (black glass in dark / over video, white card in light). */
+@Composable
+fun GlassMenu(expanded: Boolean, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    val shape = RoundedCornerShape(22.dp)
+    DropdownMenu(
+        expanded = expanded, onDismissRequest = onDismiss,
+        modifier = Modifier.glass(shape, strong = true),
+        shape = shape, containerColor = Color.Transparent, tonalElevation = 0.dp, shadowElevation = 0.dp,
+        content = content,
     )
 }
 
 @Composable
 fun LogoMark(size: Dp) {
-    Image(
-        painterResource(if (Mono.dark) R.drawable.logo_mark_dark else R.drawable.logo_mark_light),
-        "ReelVault", Modifier.size(size).clip(RoundedCornerShape(size * 0.235f)),
-    )
+    Image(painterResource(R.drawable.logo_app), "ReelVault", Modifier.size(size).clip(RoundedCornerShape(size * 0.235f)))
 }
 
 @Composable
