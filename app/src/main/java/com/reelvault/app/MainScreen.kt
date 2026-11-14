@@ -32,12 +32,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.graphics.drawscope.ContentDrawScope
-import com.reelvault.app.backdrop.backdrops.layerBackdrop
-import com.reelvault.app.backdrop.backdrops.rememberLayerBackdrop
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -105,10 +99,6 @@ fun MainScreen(vm: MainVm) {
         val style = if (dark) SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
         else SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
         activity.enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
-        // The window sits behind every screen change: keep it the theme's own colour, not always black.
-        activity.window.setBackgroundDrawable(
-            android.graphics.drawable.ColorDrawable(if (dark) android.graphics.Color.BLACK else 0xFFF2F2F2.toInt())
-        )
     }
     var scanned by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(perm) { if (perm && !scanned && prefs.auto) { scanned = true; vm.refresh() } }
@@ -156,13 +146,15 @@ fun MainScreen(vm: MainVm) {
     val hazeState = remember { HazeState() }
 
     update?.let { UpdateDialog(vm, it, progress, status) }
-    if (deleteDialog) GlassDialog(
-        onDismiss = { deleteDialog = false },
+    if (deleteDialog) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { deleteDialog = false },
         title = { Text("Delete ${selected.size} video(s)?") },
-        content = { Text("Move to bin keeps them for about 30 days so you can restore them. Delete permanently erases them from your phone for good.") },
-        buttons = {
-            androidx.compose.material3.TextButton({ val l = selected.toList(); deleteDialog = false; selected.clear(); actions.deleteForever(l) }) { Text("Delete permanently") }
+        text = { Text("Move to bin keeps them for about 30 days so you can restore them. Delete permanently erases them from your phone for good.") },
+        confirmButton = {
             androidx.compose.material3.TextButton({ val l = selected.toList(); deleteDialog = false; selected.clear(); actions.trash(l) }) { Text("Move to bin") }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton({ val l = selected.toList(); deleteDialog = false; selected.clear(); actions.deleteForever(l) }) { Text("Delete permanently") }
         },
     )
 
@@ -180,22 +172,9 @@ fun MainScreen(vm: MainVm) {
             val topPad = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 80.dp
             val bottomPad = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 110.dp
 
-            // Liquid glass (dock, header, selection bar) samples this recording of the page. It is painted over the
-            // window colour first so the glass has something opaque to blur in light AND dark theme.
-            val glassSupported = isGlassSupported()
-            val windowBg = MaterialTheme.colorScheme.background
-            val paintBackdrop: ContentDrawScope.() -> Unit = remember(windowBg) { { drawRect(windowBg); drawContent() } }
-            val appBackdrop = rememberLayerBackdrop(onDraw = paintBackdrop)
-            CompositionLocalProvider(
-                LocalHaze provides (if (SafeMode.on) null else hazeState),
-                LocalAppBackdrop provides (if (glassSupported) appBackdrop else null),
-            ) {
+            CompositionLocalProvider(LocalHaze provides (if (SafeMode.on) null else hazeState)) {
                 Box(Modifier.fillMaxSize()) {
-                    Box(
-                        Modifier.fillMaxSize()
-                            .then(if (SafeMode.on) Modifier else Modifier.haze(hazeState))
-                            .then(if (glassSupported) Modifier.layerBackdrop(appBackdrop) else Modifier)
-                    ) {
+                    Box(Modifier.fillMaxSize().then(if (SafeMode.on) Modifier else Modifier.haze(hazeState))) {
                       // Content INSIDE the haze source must not use hazeChild itself (it would blur itself and crash).
                       CompositionLocalProvider(LocalHaze provides null) {
                         AppBackground()
@@ -240,10 +219,10 @@ fun MainScreen(vm: MainVm) {
 
 @Composable
 private fun UpdateDialog(vm: MainVm, info: UpdateInfo, progress: Float?, status: String?) {
-    GlassDialog(
-        onDismiss = { if (progress == null) vm.dismissUpdate() },
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { if (progress == null) vm.dismissUpdate() },
         title = { Text("Update available • v${info.version}") },
-        content = {
+        text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(info.notes.trim().ifBlank { "A new version of ReelVault is ready." }.take(500))
                 if (info.size > 0) Text("Size: ${fmtSize(info.size)}", style = MaterialTheme.typography.bodySmall)
@@ -251,12 +230,12 @@ private fun UpdateDialog(vm: MainVm, info: UpdateInfo, progress: Float?, status:
                 if (status != null && progress == null) Text(status, style = MaterialTheme.typography.bodySmall, color = Pink)
             }
         },
-        buttons = {
-            androidx.compose.material3.TextButton({ vm.dismissUpdate() }, enabled = progress == null) { Text("Later") }
+        confirmButton = {
             androidx.compose.material3.TextButton({ vm.downloadAndInstall() }, enabled = progress == null) {
                 Text(if (progress == null) "Update now" else "Downloading…")
             }
         },
+        dismissButton = { androidx.compose.material3.TextButton({ vm.dismissUpdate() }, enabled = progress == null) { Text("Later") } },
     )
 }
 
@@ -265,209 +244,154 @@ private fun SelectionBar(
     count: Int, onClose: () -> Unit, onAll: () -> Unit, onFav: () -> Unit, onHide: () -> Unit, onDelete: () -> Unit, modifier: Modifier,
 ) {
     val onSurface = MaterialTheme.colorScheme.onSurface
-    val shape = remember { RoundedCornerShape(30.dp) }
-    val glassOn = glassAvailable()
     Row(
         modifier.statusBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().height(60.dp)
-            .then(
-                if (glassOn) Modifier.clip(shape).liquidGlass(shape).border(GLASS_EDGE_WIDTH, glassEdgeColor, shape)
-                else Modifier.glass(shape, strong = true)
-            )
-            .padding(horizontal = 8.dp),
+            .glass(RoundedCornerShape(30.dp)).padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        GlassIconButton(Icons.Rounded.Close, "Cancel", onClose, size = 42.dp, flat = true)
+        GlassIconButton(Icons.Rounded.Close, "Cancel", onClose, size = 42.dp)
         Text("$count selected", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = onSurface)
-        GlassIconButton(Icons.Rounded.SelectAll, "Select all", onAll, size = 40.dp, flat = true)
-        GlassIconButton(Icons.Rounded.FavoriteBorder, "Add to favorites", onFav, size = 40.dp, flat = true)
-        GlassIconButton(Icons.Rounded.VisibilityOff, "Hide", onHide, size = 40.dp, flat = true)
-        GlassIconButton(Icons.Rounded.Delete, "Delete", onDelete, size = 40.dp, flat = true)
+        GlassIconButton(Icons.Rounded.SelectAll, "Select all", onAll, size = 40.dp)
+        GlassIconButton(Icons.Rounded.FavoriteBorder, "Add to favorites", onFav, size = 40.dp)
+        GlassIconButton(Icons.Rounded.VisibilityOff, "Hide", onHide, size = 40.dp)
+        GlassIconButton(Icons.Rounded.Delete, "Delete", onDelete, size = 40.dp)
     }
 }
 
 @Composable
 private fun TopHeader(showSearch: Boolean, searchOn: Boolean, onSearch: () -> Unit, onSettings: () -> Unit, modifier: Modifier) {
-    val shape = remember { RoundedCornerShape(30.dp) }
-    val glassOn = glassAvailable()
-    // Liquid glass that follows the theme: dark glass in dark mode, light glass in light mode (never a black slab).
-    Row(
-        modifier.statusBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().height(60.dp)
-            .then(
-                if (glassOn) Modifier.clip(shape).liquidGlass(shape).border(GLASS_EDGE_WIDTH, glassEdgeColor, shape)
-                else Modifier.glass(shape, strong = true)
-            )
-            .padding(horizontal = 10.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Wordmark(Modifier.weight(1f).height(44.dp).padding(start = 8.dp), dark = Mono.dark)
-        if (showSearch) GlassIconButton(if (searchOn) Icons.Rounded.Close else Icons.Rounded.Search, "Search", onSearch, size = 40.dp, flat = true)
-        GlassIconButton(Icons.Rounded.Settings, "Settings", onSettings, size = 40.dp, flat = true)
+    val shape = RoundedCornerShape(30.dp)
+    // The logo bar is always black (both themes) so the chrome wordmark looks its best.
+    CompositionLocalProvider(LocalDark provides true, LocalHaze provides null) {
+        Row(
+            modifier.statusBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().height(60.dp)
+                .clip(shape).background(Color.Black).border(1.dp, Color.White.copy(alpha = 0.22f), shape).padding(horizontal = 10.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Wordmark(Modifier.weight(1f).height(44.dp).padding(start = 8.dp), dark = true)
+            if (showSearch) GlassIconButton(if (searchOn) Icons.Rounded.Close else Icons.Rounded.Search, "Search", onSearch, size = 40.dp, tint = Color.White)
+            GlassIconButton(Icons.Rounded.Settings, "Settings", onSettings, size = 40.dp, tint = Color.White)
+        }
     }
 }
 
-private const val CENTER_SLOT = 2
-private fun slotOf(t: Int) = if (t >= CENTER_SLOT) t + 1 else t
-private fun tabOf(s: Int) = if (s > CENTER_SLOT) s - 1 else s
-
-/** Gap between the dock's glass edge and the icons inside it (same as Harsh Musix's PILL_INSET). */
-private val PILL_INSET = 6.dp
-
 /**
- * Liquid-glass icon dock, ported 1:1 from Harsh Musix's floating tab bar.
- *
- * The selection pill is a real glass lens: a tap (or a finger) lifts it past the dock edges on springs, it
- * refracts the dock and the icons under it, stretches/squashes with its own acceleration while travelling,
- * resists at the ends, ticks across tab boundaries and sheds the glass back into a flat fill when it lands.
- * The centre ▶ button plays reels directly; the pill never rests on it (dragging over it just skips across).
+ * Icon dock with a draggable liquid-glass lens. Drag the lens along the dock (or tap an icon): it follows the
+ * finger, stretches like a water drop, magnifies the icons under it and springs into place on release.
+ * The centre ▶ button plays reels directly.
  */
 @Composable
 private fun BottomBar(selected: Int, onSelect: (Int) -> Unit, onReels: () -> Unit, modifier: Modifier) {
+    val dark = LocalDark.current
     val onSurface = MaterialTheme.colorScheme.onSurface
     val haptic = LocalHapticFeedback.current
-    val density = LocalDensity.current
     val scope = rememberCoroutineScope()
-    val shape = remember { RoundedCornerShape(percent = 50) }
-    val glassOn = glassAvailable()
+    val pad = with(LocalDensity.current) { 6.dp.toPx() }
+    BoxWithConstraints(
+        modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp).fillMaxWidth().height(68.dp),
+    ) {
+        val slotPx = (constraints.maxWidth - 2 * pad) / 5f
+        fun slotOf(t: Int) = if (t >= 2) t + 1 else t
+        fun tabOf(s: Int) = if (s > 2) s - 1 else s
+        val lens = remember { Animatable(0f) }
+        var dragging by remember { mutableStateOf(false) }
+        var placed by remember { mutableStateOf(false) }
+        var dragX by remember { mutableFloatStateOf(0f) }
+        val springSpec = spring<Float>(Spring.DampingRatioLowBouncy, Spring.StiffnessMediumLow)
 
-    val selectedSlot = slotOf(selected)
-    val currentSlot by rememberUpdatedState(selectedSlot)
-    val currentOnSelect by rememberUpdatedState(onSelect)
+        LaunchedEffect(selected, slotPx) {
+            if (dragging) return@LaunchedEffect
+            val target = slotPx * slotOf(selected)
+            if (!placed) { lens.snapTo(target); placed = true } else lens.animateTo(target, springSpec)
+        }
+        fun settle() {
+            val pos = lens.value / slotPx
+            val raw = pos.roundToInt().coerceIn(0, 4)
+            val s = if (raw == 2) (if (pos < 2f) 1 else 3) else raw     // the lens never rests on the ▶ button
+            dragging = false
+            if (tabOf(s) != selected) onSelect(tabOf(s))
+            scope.launch { lens.animateTo(slotPx * s, springSpec) }
+        }
 
-    val pill = remember { GlassPillMotion(scope, selectedSlot) }
-    val barGlass = rememberLayerBackdrop()
-    val tabRow = rememberLayerBackdrop()
-    var rowSize by remember { mutableStateOf(IntSize.Zero) }
-    var lastHapticSlot by remember { mutableIntStateOf(selectedSlot) }
+        // dock body
+        Box(Modifier.fillMaxSize().glassFrosted(RoundedCornerShape(34.dp), strong = true))
 
-    val padPx = with(density) { PILL_INSET.toPx() }
-    val slotW = if (rowSize.width > 0) rowSize.width / 5f else 0f
-    pill.stepDp = slotW / density.density
-    val rowH = rowSize.height.toFloat()
-    val restSize = Size(slotW, rowH)
-    // The pill rests in its slot and lifts to stand PILL_GROW_HEIGHT taller than the whole dock.
-    val liftedH = rowH + padPx * 2f + with(density) { PILL_GROW_HEIGHT.toPx() }
-    val liftedSize = if (rowH > 0f) Size(liftedH * slotW / rowH, liftedH) else restSize
-    val centerInRow: (Float) -> Offset = { pos -> Offset(pos * slotW + slotW / 2f, rowH / 2f) }
-    val showPill = slotW > 0f && rowH > 0f
-
-    LaunchedEffect(selectedSlot) {
-        pill.animateTo(selectedSlot)
-        lastHapticSlot = selectedSlot
-    }
-
-    Box(modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp).fillMaxWidth()) {
-        // The dock's own glass is exported so the lens can refract it.
-        CompositionLocalProvider(LocalGlassExport provides barGlass) {
-            Box(
-                Modifier.fillMaxWidth()
-                    .then(
-                        if (glassOn) Modifier.clip(shape).liquidGlass(shape).border(GLASS_EDGE_WIDTH, glassEdgeColor, shape)
-                        else Modifier.glass(shape, strong = true)
+        // the liquid-glass lens (bigger than the dock, so it bulges out of it)
+        val lensScale by animateFloatAsState(if (dragging) 1.10f else 1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow), label = "lensScale")
+        val restPx = slotPx * slotOf(selected)
+        Box(
+            Modifier
+                .layout { m, _ ->
+                    val w = (slotPx + 10.dp.toPx()).roundToInt()
+                    val h = 78.dp.toPx().roundToInt()
+                    val p = m.measure(Constraints.fixed(w, h))
+                    layout(0, 0) { p.place((pad + lens.value - 5.dp.toPx()).roundToInt(), (-5.dp.toPx()).roundToInt()) }
+                }
+                .graphicsLayer {
+                    val stretch = (abs(lens.value - restPx) / slotPx).coerceIn(0f, 1f)
+                    scaleX = (1f + 0.30f * stretch) * lensScale
+                    scaleY = (1f - 0.10f * stretch) * lensScale
+                }
+                .drawWithContent {
+                    drawContent()
+                    val r = CornerRadius(size.height / 2f)
+                    val ink = if (dark) Color.White else Color.Black
+                    val k = if (dark) 1f else 0.8f
+                    drawRoundRect(ink.copy(alpha = 0.10f * k), cornerRadius = r)                                   // clear body
+                    drawRoundRect(Brush.verticalGradient(0f to ink.copy(alpha = 0.22f * k), 0.5f to Color.Transparent), cornerRadius = r)   // sheen
+                    drawRoundRect(Brush.verticalGradient(0.70f to Color.Transparent, 1f to ink.copy(alpha = 0.14f * k)), cornerRadius = r) // caustic
+                    inset(3.dp.toPx()) {
+                        drawRoundRect(ink.copy(alpha = 0.18f * k), cornerRadius = CornerRadius(size.height / 2f), style = Stroke(1.dp.toPx()))
+                    }
+                    drawRoundRect(                                                                              // specular rim
+                        Brush.linearGradient(
+                            0f to ink.copy(alpha = 0.90f * k), 0.35f to ink.copy(alpha = 0.10f * k),
+                            0.70f to ink.copy(alpha = 0.08f * k), 1f to ink.copy(alpha = 0.60f * k),
+                            start = Offset.Zero, end = Offset(size.width, size.height)),
+                        cornerRadius = r, style = Stroke(1.6.dp.toPx()),
                     )
-                    .padding(PILL_INSET),
-            ) {
-                // Flat pill: what is drawn at rest (and everywhere when real glass is unavailable).
-                // Always composed (never added/removed mid-frame, which crashed measure); it just fades out
-                // while the glass lens is lifted.
-                FlatSelectionPill(
-                    color = glassIndicatorColor,
-                    modifier = Modifier.matchParentSize()
-                        .graphicsLayer { alpha = if (glassOn && !pill.isFlat) 0f else 1f }
-                        .pillPlacement(
-                            center = { centerInRow(pill.position) },
-                            size = { pill.liveSize(restSize, liftedSize) },
-                        ),
-                )
+                }
+        )
 
-                Row(
-                    Modifier.fillMaxWidth().height(56.dp)
-                        .onSizeChanged { rowSize = it }
-                        .layerBackdrop(tabRow)
-                        .pointerInput(slotW, currentSlot) {
-                            if (slotW <= 0f) return@pointerInput
-                            var totalDrag = 0f
-                            detectHorizontalDragGestures(
-                                onDragStart = { totalDrag = 0f; pill.startDrag() },
-                                onDragCancel = { pill.release(currentSlot) },
-                                onDragEnd = {
-                                    val ratio = totalDrag / slotW
-                                    val shift = when {
-                                        ratio > 0.35f -> maxOf(1, ratio.roundToInt())
-                                        ratio < -0.35f -> minOf(-1, ratio.roundToInt())
-                                        else -> 0
-                                    }
-                                    var target = (currentSlot + shift).coerceIn(0, 4)
-                                    if (target == CENTER_SLOT) target = if (shift > 0) 3 else 1   // never rest on ▶
-                                    pill.release(target)
-                                    if (target != currentSlot) currentOnSelect(tabOf(target))
-                                },
-                                onHorizontalDrag = { _, delta ->
-                                    totalDrag += delta
-                                    val dragOffset = when {
-                                        totalDrag > 0 && currentSlot == 4 -> totalDrag * 0.25f   // rubber-band at the ends
-                                        totalDrag < 0 && currentSlot == 0 -> totalDrag * 0.25f
-                                        else -> totalDrag
-                                    }
-                                    pill.dragTo(currentSlot + dragOffset / slotW)
-                                    val approx = (currentSlot + dragOffset / slotW).coerceIn(0f, 4f).roundToInt()
-                                    if (approx != lastHapticSlot) {
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        lastHapticSlot = approx
-                                    }
-                                },
-                            )
-                        },
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    for (i in 0..4) {
-                        if (i == CENTER_SLOT) {
-                            Box(Modifier.weight(1f).fillMaxHeight().bounceClick(onClick = onReels), contentAlignment = Alignment.Center) {
-                                Box(Modifier.size(50.dp).clip(CircleShape).background(AccentBrush), contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Rounded.PlayArrow, "Play reels", tint = OnAccent, modifier = Modifier.size(30.dp))
-                                }
-                            }
-                        } else {
-                            val t = tabOf(i)
-                            // On the glass dock the tint comes from the surface luminance (Musix's nav bar rule);
-                            // the haze fallback keeps the theme accents.
-                            val glassContent = glassContentColor()
-                            val c = when {
-                                glassOn && t == selected -> glassContent
-                                glassOn -> glassContent.copy(alpha = 0.65f)
-                                t == selected -> Violet
-                                else -> onSurface.copy(alpha = 0.72f)
-                            }
-                            Box(Modifier.weight(1f).fillMaxHeight().bounceClick { onSelect(t) }, contentAlignment = Alignment.Center) {
-                                Icon(
-                                    tabs[t].icon, tabs[t].label, tint = c,
-                                    modifier = Modifier.size(27.dp).graphicsLayer {
-                                        val d = abs(i - pill.position)
-                                        val sc = 1f + 0.16f * (1f - d).coerceIn(0f, 1f)   // icon under the pill grows a little
-                                        scaleX = sc; scaleY = sc
-                                    },
-                                )
-                            }
+        // icons (+ drag handling for the whole dock)
+        Row(
+            Modifier.fillMaxSize().padding(6.dp).pointerInput(slotPx) {
+                detectHorizontalDragGestures(
+                    onDragStart = { dragging = true; dragX = lens.value },
+                    onDragEnd = { settle() },
+                    onDragCancel = { settle() },
+                ) { change, dx ->
+                    change.consume()
+                    val before = (dragX / slotPx).roundToInt()
+                    dragX = (dragX + dx).coerceIn(0f, slotPx * 4)
+                    if ((dragX / slotPx).roundToInt() != before) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    scope.launch { lens.snapTo(dragX) }
+                }
+            },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            for (i in 0..4) {
+                if (i == 2) {
+                    Box(Modifier.weight(1f).fillMaxHeight().bounceClick(onClick = onReels), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(50.dp).clip(CircleShape).background(AccentBrush), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Rounded.PlayArrow, "Play reels", tint = OnAccent, modifier = Modifier.size(30.dp))
                         }
+                    }
+                } else {
+                    val t = tabOf(i)
+                    val c = if (t == selected) Violet else onSurface.copy(alpha = 0.72f)
+                    Box(Modifier.weight(1f).fillMaxHeight().bounceClick { onSelect(t) }, contentAlignment = Alignment.Center) {
+                        Icon(
+                            tabs[t].icon, tabs[t].label, tint = c,
+                            modifier = Modifier.size(27.dp).graphicsLayer {
+                                val d = abs(i * slotPx - lens.value) / slotPx
+                                val sc = 1f + 0.28f * (1f - d).coerceIn(0f, 1f)      // icons under the lens get magnified
+                                scaleX = sc; scaleY = sc
+                            },
+                        )
                     }
                 }
             }
-        }
-
-        // The lifted glass lens: drawn over the dock, free to stand past its edges. Always composed;
-        // it skips drawing while the pill is flat.
-        if (glassOn) {
-            GlassSelectionPill(
-                motion = pill,
-                fillColor = glassIndicatorColor,
-                barGlass = barGlass,
-                tabRow = tabRow,
-                modifier = Modifier.matchParentSize()
-                    .drawWithContent { if (!pill.isFlat) drawContent() }
-                    .pillPlacement(
-                        center = { centerInRow(pill.position) + Offset(padPx, padPx) },
-                        size = { pill.liveSize(restSize, liftedSize) },
-                    ),
-            )
         }
     }
 }

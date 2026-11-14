@@ -142,7 +142,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { kotlinx.coroutines.delay(200); refresh() }
     }
 
-    fun saveProfile(name: String, handle: String, bio: String, avatar: Uri?) = io {
+    fun saveProfile(name: String, handle: String, bio: String, instagram: String, avatar: Uri?) = io {
         val app = getApplication<Application>()
         var path: String? = null
         if (avatar != null) {
@@ -157,6 +157,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
             it[K.name] = name.trim()
             it[K.handle] = handle.trim().removePrefix("@").replace(" ", "_")
             it[K.bio] = bio.trim()
+            it[K.instagram] = instagram.trim().removePrefix("@")
             path?.let { p -> it[K.avatar] = p }
         }
     }

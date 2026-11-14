@@ -76,13 +76,9 @@ fun Modifier.glass(shape: Shape = RoundedCornerShape(24.dp), strong: Boolean = f
         return this.shadow(if (strong) 8.dp else 1.5.dp, shape, ambientColor = Color(0x33000000), spotColor = Color(0x33000000))
             .clip(shape).background(Color.White).border(1.dp, Color(0xFFDDDDDD), shape)
     }
-    val haze = LocalHaze.current
+    // No backdrop blur here: the current black liquid glass is a smoked body + layered highlights.
     val smoke = Color.Black.copy(alpha = if (strong) 0.58f else 0.42f)
-    val base = if (haze != null)
-        this.hazeChild(state = haze, shape = shape, style = HazeStyle(
-            backgroundColor = Color.Black, tint = HazeTint(smoke), blurRadius = 30.dp, noiseFactor = 0.04f,
-        ))
-    else this.clip(shape).background(smoke)
+    val base = this.clip(shape).background(smoke)
     return base.drawWithContent {
         drawContent()
         val outline = shape.createOutline(size, layoutDirection, this)
@@ -108,6 +104,53 @@ fun Modifier.glass(shape: Shape = RoundedCornerShape(24.dp), strong: Boolean = f
         drawOutline(outline, Brush.linearGradient(
             0f to white.copy(alpha = 0.95f), 0.28f to white.copy(alpha = 0.12f), 0.72f to white.copy(alpha = 0.08f), 1f to white.copy(alpha = 0.55f),
             start = Offset(0f, 0f), end = Offset(w, h)), style = Stroke(1.6.dp.toPx()))
+    }
+}
+
+/**
+ * The v1.5 frosted glass: real backdrop blur (Haze, 28dp) with a light white tint, sheen, top highlight and rim.
+ * Used only by the bottom drag dock. Falls back to a white gradient fill when there is no Haze source.
+ */
+@Composable
+fun Modifier.glassFrosted(shape: Shape = RoundedCornerShape(24.dp), strong: Boolean = false): Modifier {
+    val dark = LocalDark.current
+    if (!dark) return this.glass(shape, strong)            // light theme: same clean white card as before
+    val haze = LocalHaze.current
+    val fill = Color.White.copy(alpha = if (strong) 0.16f else 0.10f)
+    val base = if (haze != null)
+        this.hazeChild(state = haze, shape = shape, style = HazeStyle(
+            backgroundColor = Color.Black,
+            tint = HazeTint(fill), blurRadius = 28.dp, noiseFactor = 0.03f,
+        ))
+    else this.clip(shape)
+        .background(Color.Black.copy(alpha = 0.16f))
+        .background(Brush.linearGradient(listOf(fill.copy(alpha = fill.alpha * 1.7f), fill.copy(alpha = fill.alpha * 0.7f))))
+    return base.drawWithContent {
+        drawContent()
+        val outline = shape.createOutline(size, layoutDirection, this)
+        val w = size.width
+        val h = size.height
+        val rim = 1.6.dp.toPx()
+        drawOutline(                                                                         // diagonal sheen
+            outline,
+            Brush.linearGradient(
+                0f to Color.White.copy(alpha = 0.26f), 0.40f to Color.Transparent, 1f to Blue.copy(alpha = 0.14f),
+                start = Offset(0f, 0f), end = Offset(w * 0.8f, h),
+            ),
+        )
+        drawOutline(                                                                         // top lens highlight
+            outline,
+            Brush.verticalGradient(0f to Color.White.copy(alpha = 0.22f), 0.28f to Color.Transparent, startY = 0f, endY = h),
+        )
+        drawOutline(                                                                         // specular rim
+            outline,
+            Brush.linearGradient(
+                0f to Color.White.copy(alpha = 0.95f), 0.30f to Color.White.copy(alpha = 0.10f),
+                0.70f to Color.White.copy(alpha = 0.06f), 1f to Violet.copy(alpha = 0.85f),
+                start = Offset(0f, 0f), end = Offset(w, h),
+            ),
+            style = Stroke(rim),
+        )
     }
 }
 
@@ -173,9 +216,9 @@ fun AppBackground() {
 
 /** The ReelVault "M" logo (white on transparent, made for black bars). */
 @Composable
-fun Wordmark(modifier: Modifier = Modifier, dark: Boolean = Mono.dark) {
+fun Wordmark(modifier: Modifier = Modifier, dark: Boolean = true) {
     Image(
-        painterResource(if (dark) R.drawable.logo_m else R.drawable.logo_m_light), "ReelVault", modifier,
+        painterResource(R.drawable.logo_m), "ReelVault", modifier,
         contentScale = ContentScale.Fit, alignment = Alignment.CenterStart,
     )
 }
@@ -201,12 +244,9 @@ fun LogoMark(size: Dp) {
 fun GlassIconButton(
     icon: ImageVector, desc: String, onClick: () -> Unit, modifier: Modifier = Modifier,
     size: Dp = 44.dp, tint: Color = MaterialTheme.colorScheme.onSurface,
-    /** Sits inside a glass bar already: a soft tinted circle instead of a second glass layer (readable in light mode). */
-    flat: Boolean = false,
 ) {
-    val base = if (flat) Modifier.clip(CircleShape).background(tint.copy(alpha = 0.10f)) else Modifier.glass(CircleShape)
     Box(
-        modifier.bounceClick(onClick = onClick).size(size).then(base),
+        modifier.bounceClick(onClick = onClick).size(size).glass(CircleShape),
         contentAlignment = Alignment.Center,
     ) { Icon(icon, desc, tint = tint, modifier = Modifier.size(size * 0.5f)) }
 }
