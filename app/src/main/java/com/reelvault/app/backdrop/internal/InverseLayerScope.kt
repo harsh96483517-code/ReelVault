@@ -51,8 +51,10 @@ internal class InverseLayerScope : GraphicsLayerScope {
     override var shape: Shape = RectangleShape
     override var clip: Boolean = false
     override var renderEffect: RenderEffect? = null
-    override var blendMode: BlendMode = BlendMode.SrcOver
-    override var colorFilter: ColorFilter? = null
+    // GraphicsLayerScope in Compose 1.7 has no blendMode/colorFilter (added later), so these
+    // stay as plain members of the scope rather than interface overrides.
+    var blendMode: BlendMode = BlendMode.SrcOver
+    var colorFilter: ColorFilter? = null
     override var compositingStrategy: CompositingStrategy = CompositingStrategy.Auto
 
     private var matrix: Matrix? = null
