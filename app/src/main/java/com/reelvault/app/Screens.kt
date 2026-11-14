@@ -145,7 +145,7 @@ fun HomeScreen(
 // ───────────────────────── LIBRARY ─────────────────────────
 @Composable
 fun LibraryScreen(
-    vm: MainVm, perm: Boolean, askPerm: () -> Unit, topPad: Dp, bottomPad: Dp, onOpenFolder: (String) -> Unit,
+    vm: MainVm, perm: Boolean, askPerm: () -> Unit, topPad: Dp, bottomPad: Dp, onBin: () -> Unit, onOpenFolder: (String) -> Unit,
 ) {
     val folders by vm.folders.collectAsState()
     val prefs by vm.prefs.collectAsState()
@@ -159,6 +159,19 @@ fun LibraryScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item { Text("Library", style = MaterialTheme.typography.titleLarge, color = onSurface) }
+        item {
+            Row(
+                Modifier.fillMaxWidth().bounceClick(onClick = onBin).glass(RoundedCornerShape(18.dp)).padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(Icons.Rounded.Delete, null, tint = onSurface)
+                Column(Modifier.weight(1f)) {
+                    Text("Bin", color = onSurface, fontWeight = FontWeight.Medium)
+                    Text("Restore deleted videos or erase them for good", style = MaterialTheme.typography.bodySmall, color = onSurface.copy(alpha = 0.6f))
+                }
+                Icon(Icons.Rounded.ChevronRight, null, tint = onSurface.copy(alpha = 0.5f))
+            }
+        }
         item {
             GlassCard {
                 Text("Scan your phone for videos. Folders you add are read-only; originals are never changed.",

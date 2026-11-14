@@ -109,6 +109,9 @@ fun MainScreen(vm: MainVm) {
     val toggle: (String) -> Unit = { u -> if (u in selected) selected.remove(u) else selected.add(u) }
     var vault by remember { mutableStateOf(false) }
     var vaultAuth by remember { mutableStateOf(false) }
+    var bin by remember { mutableStateOf(false) }
+    var deleteDialog by remember { mutableStateOf(false) }
+    val actions = rememberMediaActions(vm)
     LaunchedEffect(tab) { selected.clear() }
     DisposableEffect(vault) {
         AppLock.vaultOpen = vault
@@ -127,11 +130,23 @@ fun MainScreen(vm: MainVm) {
     val hazeState = remember { HazeState() }
 
     update?.let { UpdateDialog(vm, it, progress, status) }
+    if (deleteDialog) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { deleteDialog = false },
+        title = { Text("Delete ${selected.size} video(s)?") },
+        text = { Text("Move to bin keeps them for about 30 days so you can restore them. Delete permanently erases them from your phone for good.") },
+        confirmButton = {
+            androidx.compose.material3.TextButton({ val l = selected.toList(); deleteDialog = false; selected.clear(); actions.trash(l) }) { Text("Move to bin") }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton({ val l = selected.toList(); deleteDialog = false; selected.clear(); actions.deleteForever(l) }) { Text("Delete permanently") }
+        },
+    )
 
     when {
         req != null -> ReelsScreen(vm, req!!) { req = null }
         vaultAuth -> UnlockPanel("Hidden vault", "Verify it's you", onSuccess = { vaultAuth = false; vault = true }, onCancel = { vaultAuth = false })
         vault -> VaultScreen(vm, onBack = { vault = false }, onPlay = { req = it })
+        bin -> BinScreen(vm, actions) { bin = false }
         settings -> SettingsScreen(vm) { settings = false }
         else -> {
             BackHandler(enabled = selected.isNotEmpty() || tab != 0 || search) {
@@ -158,7 +173,7 @@ fun MainScreen(vm: MainVm) {
                         ) { t ->
                             when (t) {
                                 0 -> HomeScreen(vm, perm, { askPerm() }, search, topPad, bottomPad, homeGrid, homeList, selected, toggle) { uris, i -> req = PlayRequest(uris, i) }
-                                1 -> LibraryScreen(vm, perm, { askPerm() }, topPad, bottomPad) { folder -> vm.folderFilter.value = folder; tab = 0 }
+                                1 -> LibraryScreen(vm, perm, { askPerm() }, topPad, bottomPad, { bin = true }) { folder -> vm.folderFilter.value = folder; tab = 0 }
                                 2 -> FavoritesScreen(vm, topPad, bottomPad, selected, toggle) { req = it }
                                 else -> ProfileScreen(vm, topPad, bottomPad, openVault) { settings = true }
                             }
@@ -176,6 +191,7 @@ fun MainScreen(vm: MainVm) {
                             vm.hide(selected.toList()); selected.clear()
                             android.widget.Toast.makeText(ctx, "$n hidden. Find them in Profile > Hidden vault.", android.widget.Toast.LENGTH_LONG).show()
                         },
+                        { deleteDialog = true },
                         Modifier.align(Alignment.TopCenter),
                     )
                     BottomBar(tab, { tab = it }, startReels, Modifier.align(Alignment.BottomCenter))
@@ -209,7 +225,7 @@ private fun UpdateDialog(vm: MainVm, info: UpdateInfo, progress: Float?, status:
 
 @Composable
 private fun SelectionBar(
-    count: Int, onClose: () -> Unit, onAll: () -> Unit, onFav: () -> Unit, onHide: () -> Unit, modifier: Modifier,
+    count: Int, onClose: () -> Unit, onAll: () -> Unit, onFav: () -> Unit, onHide: () -> Unit, onDelete: () -> Unit, modifier: Modifier,
 ) {
     val onSurface = MaterialTheme.colorScheme.onSurface
     Row(
@@ -222,6 +238,7 @@ private fun SelectionBar(
         GlassIconButton(Icons.Rounded.SelectAll, "Select all", onAll, size = 40.dp)
         GlassIconButton(Icons.Rounded.FavoriteBorder, "Add to favorites", onFav, size = 40.dp)
         GlassIconButton(Icons.Rounded.VisibilityOff, "Hide", onHide, size = 40.dp)
+        GlassIconButton(Icons.Rounded.Delete, "Delete", onDelete, size = 40.dp)
     }
 }
 

@@ -41,6 +41,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.inset
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
@@ -61,9 +63,9 @@ import dev.chrisbanes.haze.hazeChild
 val LocalHaze = staticCompositionLocalOf<HazeState?> { null }
 
 /**
- * Liquid-glass surface. With a Haze source: real background blur + light frosted tint.
- * Without one (over video / inside the blurred area): a white "glass" gradient fill.
- * On top: diagonal sheen, top-edge lens highlight, pink/cyan edge dispersion and a bright specular rim.
+ * Black liquid glass (dark theme / over video). Smoked black body with real blur where a Haze source exists,
+ * then layered detail: body depth gradient, top lens highlight, bottom caustic glow, an inner edge ring
+ * (thickness), a specular rim and a bright glint. Light theme = clean solid white card.
  */
 @Composable
 fun Modifier.glass(shape: Shape = RoundedCornerShape(24.dp), strong: Boolean = false): Modifier {
@@ -74,49 +76,41 @@ fun Modifier.glass(shape: Shape = RoundedCornerShape(24.dp), strong: Boolean = f
             .clip(shape).background(Color.White).border(1.dp, Color(0xFFDDDDDD), shape)
     }
     val haze = LocalHaze.current
-    val fill = if (dark) Color.White.copy(alpha = if (strong) 0.16f else 0.10f)
-    else Color.White.copy(alpha = if (strong) 0.62f else 0.45f)
+    val smoke = Color.Black.copy(alpha = if (strong) 0.58f else 0.42f)
     val base = if (haze != null)
         this.hazeChild(state = haze, shape = shape, style = HazeStyle(
-            backgroundColor = Color.Black,
-            tint = HazeTint(fill), blurRadius = 28.dp, noiseFactor = 0.03f,
+            backgroundColor = Color.Black, tint = HazeTint(smoke), blurRadius = 30.dp, noiseFactor = 0.04f,
         ))
-    else this.clip(shape)
-        .background(if (dark) Color.Black.copy(alpha = 0.16f) else Color.Transparent)
-        .background(Brush.linearGradient(listOf(fill.copy(alpha = fill.alpha * 1.7f), fill.copy(alpha = fill.alpha * 0.7f))))
+    else this.clip(shape).background(smoke)
     return base.drawWithContent {
         drawContent()
         val outline = shape.createOutline(size, layoutDirection, this)
         val w = size.width
         val h = size.height
-        val rim = 1.6.dp.toPx()
-        // diagonal sheen
-        drawOutline(
-            outline,
-            Brush.linearGradient(
-                0f to Color.White.copy(alpha = if (dark) 0.26f else 0.55f),
-                0.40f to Color.Transparent,
-                1f to Blue.copy(alpha = 0.14f),
-                start = Offset(0f, 0f), end = Offset(w * 0.8f, h),
-            ),
-        )
-        // top lens highlight (light pooling at the top edge)
-        drawOutline(
-            outline,
-            Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.22f else 0.5f), 0.28f to Color.Transparent, startY = 0f, endY = h),
-        )
-        // specular rim
-        drawOutline(
-            outline,
-            Brush.linearGradient(
-                0f to Color.White.copy(alpha = 0.95f),
-                0.30f to Color.White.copy(alpha = 0.10f),
-                0.70f to Color.White.copy(alpha = 0.06f),
-                1f to Violet.copy(alpha = 0.85f),
-                start = Offset(0f, 0f), end = Offset(w, h),
-            ),
-            style = Stroke(rim),
-        )
+        val white = Color.White
+        // 1. body depth: light from the top-left, deeper black toward the bottom-right
+        drawOutline(outline, Brush.linearGradient(
+            0f to white.copy(alpha = 0.14f), 0.35f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.30f),
+            start = Offset(0f, 0f), end = Offset(w * 0.8f, h)))
+        // 2. top lens highlight
+        drawOutline(outline, Brush.verticalGradient(0f to white.copy(alpha = 0.20f), 0.22f to Color.Transparent, startY = 0f, endY = h))
+        // 3. bottom caustic: light pooling in the lower edge
+        drawOutline(outline, Brush.verticalGradient(0.78f to Color.Transparent, 1f to white.copy(alpha = 0.10f), startY = 0f, endY = h))
+        // 4. inner edge ring: gives the glass thickness
+        inset(3.dp.toPx()) {
+            val inner = shape.createOutline(this.size, layoutDirection, this)
+            drawOutline(inner, Brush.linearGradient(
+                0f to white.copy(alpha = 0.28f), 0.5f to white.copy(alpha = 0.03f), 1f to white.copy(alpha = 0.16f),
+                start = Offset(0f, 0f), end = Offset(w, h)), style = Stroke(1.dp.toPx()))
+        }
+        // 5. specular rim
+        drawOutline(outline, Brush.linearGradient(
+            0f to white.copy(alpha = 0.95f), 0.28f to white.copy(alpha = 0.12f), 0.72f to white.copy(alpha = 0.08f), 1f to white.copy(alpha = 0.55f),
+            start = Offset(0f, 0f), end = Offset(w, h)), style = Stroke(1.6.dp.toPx()))
+        // 6. glint: short bright streak + dot on the top-left edge
+        val gy = 2.4.dp.toPx()
+        drawLine(white.copy(alpha = 0.85f), Offset(w * 0.30f, gy), Offset(w * 0.46f, gy), 1.6.dp.toPx(), StrokeCap.Round)
+        drawCircle(white.copy(alpha = 0.85f), 1.3.dp.toPx(), Offset(w * 0.52f, gy))
     }
 }
 

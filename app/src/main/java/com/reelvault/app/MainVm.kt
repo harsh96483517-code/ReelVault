@@ -118,6 +118,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     fun savePosition(uri: String, pos: Long, dur: Long) = io {
         dao.setPosition(uri, if (dur > 0 && pos > dur - 2000) 0 else pos.coerceAtLeast(0))
     }
+    fun removeRows(uris: List<String>) = io { uris.chunked(500).forEach { dao.delete(it) } }
     fun hide(uris: List<String>) = io { uris.chunked(500).forEach { dao.setHidden(it, true) } }
     fun unhide(uris: List<String>) = io { uris.chunked(500).forEach { dao.setHidden(it, false) } }
     fun favoriteMany(uris: List<String>, v: Boolean) = io { uris.chunked(500).forEach { dao.setFavoriteMany(it, v) } }
@@ -126,7 +127,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     fun addFolder(uri: Uri) {
         runCatching {
             getApplication<Application>().contentResolver
-                .takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                .takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
         }
         setPref { it[K.folders] = (it[K.folders] ?: emptySet()) + uri.toString() }
         viewModelScope.launch { kotlinx.coroutines.delay(200); refresh() }
