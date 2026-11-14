@@ -101,7 +101,6 @@ fun ReelsScreen(vm: MainVm, req: PlayRequest, onClose: () -> Unit) {
     val uris = req.uris
     if (uris.isEmpty()) { LaunchedEffect(Unit) { onClose() }; return }
     val scope = rememberCoroutineScope()
-    val actions = rememberMediaActions(vm)
     val prevDark = remember { Mono.dark }
     Mono.dark = true
     DisposableEffect(Unit) { onDispose { Mono.dark = prevDark } }
@@ -192,7 +191,7 @@ fun ReelsScreen(vm: MainVm, req: PlayRequest, onClose: () -> Unit) {
         MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(onSurface = Color.White, surface = Color(0xFF1C1C1C), surfaceContainer = Color(0xFF1C1C1C))) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             VerticalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 0, key = { uris[it] }) { page ->
-                ReelPage(uris[page], byUri[uris[page]], page == pager.settledPage, st, vm, actions, prefs, onClose)
+                ReelPage(uris[page], byUri[uris[page]], page == pager.settledPage, st, vm, prefs, onClose)
             }
         }
         }
@@ -202,10 +201,9 @@ fun ReelsScreen(vm: MainVm, req: PlayRequest, onClose: () -> Unit) {
 @OptIn(UnstableApi::class)
 @Composable
 private fun ReelPage(
-    uri: String, e: VideoEntity?, isCur: Boolean, st: PlayerState, vm: MainVm, actions: MediaActions, prefs: Prefs, onBack: () -> Unit,
+    uri: String, e: VideoEntity?, isCur: Boolean, st: PlayerState, vm: MainVm, prefs: Prefs, onBack: () -> Unit,
 ) {
     val ctx = LocalContext.current
-    var confirmDelete by remember { mutableStateOf(false) }
     var heart by remember { mutableStateOf(false) }
     var speedMenu by remember { mutableStateOf(false) }
     var moreMenu by remember { mutableStateOf(false) }
@@ -274,7 +272,7 @@ private fun ReelPage(
                 Text("ReelVault", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.weight(1f))
                 Box {
                     GlassChip("${st.speed}x".replace(".0x", "x"), { speedMenu = true }, icon = Icons.Rounded.Speed)
-                    GlassMenu(speedMenu, { speedMenu = false }) {
+                    DropdownMenu(speedMenu, { speedMenu = false }) {
                         listOf(0.5f, 1f, 1.5f, 2f).forEach { s ->
                             DropdownMenuItem(
                                 text = { Text("${s}x".replace(".0x", "x")) },
@@ -324,7 +322,7 @@ private fun ReelPage(
                         }
                         Box {
                             RailButton(Icons.Rounded.MoreVert, "More", Color.White) { moreMenu = true }
-                            GlassMenu(moreMenu, { moreMenu = false }) {
+                            DropdownMenu(moreMenu, { moreMenu = false }) {
                                 DropdownMenuItem({ Text("Edit caption") }, { moreMenu = false; editCaption = true }, leadingIcon = { Icon(Icons.Rounded.Edit, null) })
                                 DropdownMenuItem({ Text("Video info") }, { moreMenu = false; info = true }, leadingIcon = { Icon(Icons.Rounded.Info, null) })
                                 DropdownMenuItem({ Text("Open with…") }, {
@@ -340,12 +338,6 @@ private fun ReelPage(
                                     st.player.repeatMode = if (st.loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
                                     moreMenu = false
                                 }, leadingIcon = { Icon(Icons.Rounded.Repeat, null) })
-                        DropdownMenuItem({ Text("Move to bin") }, {
-                            moreMenu = false; actions.trash(listOf(uri)) { onBack() }
-                        }, leadingIcon = { Icon(Icons.Rounded.Delete, null) })
-                        DropdownMenuItem({ Text("Delete permanently") }, {
-                            moreMenu = false; confirmDelete = true
-                        }, leadingIcon = { Icon(Icons.Rounded.DeleteForever, null) })
                             }
                         }
                     }
@@ -376,13 +368,6 @@ private fun ReelPage(
         }
     }
 
-    if (confirmDelete) AlertDialog(
-        onDismissRequest = { confirmDelete = false },
-        title = { Text("Delete permanently?") },
-        text = { Text("This video will be erased from your phone and can't be recovered.") },
-        confirmButton = { TextButton({ confirmDelete = false; actions.deleteForever(listOf(uri)) { onBack() } }) { Text("Delete") } },
-        dismissButton = { TextButton({ confirmDelete = false }) { Text("Cancel") } },
-    )
     if (info && e != null) AlertDialog(
         onDismissRequest = { info = false }, confirmButton = { TextButton({ info = false }) { Text("Close") } },
         title = { Text("Video info") },
