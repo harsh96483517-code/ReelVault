@@ -369,15 +369,17 @@ private fun BottomBar(selected: Int, onSelect: (Int) -> Unit, onReels: () -> Uni
                     .padding(PILL_INSET),
             ) {
                 // Flat pill: what is drawn at rest (and everywhere when real glass is unavailable).
-                if (showPill && (!glassOn || pill.isFlat)) {
-                    FlatSelectionPill(
-                        color = glassIndicatorColor,
-                        modifier = Modifier.matchParentSize().pillPlacement(
+                // Always composed (never added/removed mid-frame, which crashed measure); it just fades out
+                // while the glass lens is lifted.
+                FlatSelectionPill(
+                    color = glassIndicatorColor,
+                    modifier = Modifier.matchParentSize()
+                        .graphicsLayer { alpha = if (glassOn && !pill.isFlat) 0f else 1f }
+                        .pillPlacement(
                             center = { centerInRow(pill.position) },
                             size = { pill.liveSize(restSize, liftedSize) },
                         ),
-                    )
-                }
+                )
 
                 Row(
                     Modifier.fillMaxWidth().height(56.dp)
@@ -445,17 +447,20 @@ private fun BottomBar(selected: Int, onSelect: (Int) -> Unit, onReels: () -> Uni
             }
         }
 
-        // The lifted glass lens: drawn over the dock, free to stand past its edges.
-        if (glassOn && showPill && !pill.isFlat) {
+        // The lifted glass lens: drawn over the dock, free to stand past its edges. Always composed;
+        // it skips drawing while the pill is flat.
+        if (glassOn) {
             GlassSelectionPill(
                 motion = pill,
                 fillColor = glassIndicatorColor,
                 barGlass = barGlass,
                 tabRow = tabRow,
-                modifier = Modifier.matchParentSize().pillPlacement(
-                    center = { centerInRow(pill.position) + Offset(padPx, padPx) },
-                    size = { pill.liveSize(restSize, liftedSize) },
-                ),
+                modifier = Modifier.matchParentSize()
+                    .drawWithContent { if (!pill.isFlat) drawContent() }
+                    .pillPlacement(
+                        center = { centerInRow(pill.position) + Offset(padPx, padPx) },
+                        size = { pill.liveSize(restSize, liftedSize) },
+                    ),
             )
         }
     }
