@@ -348,10 +348,14 @@ private fun EditProfileDialog(prefs: Prefs, onDismiss: () -> Unit, onSave: (Stri
     var bio by remember { mutableStateOf(prefs.bio) }
     var photo by remember { mutableStateOf<Uri?>(null) }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { if (it != null) photo = it }
-    AlertDialog(
-        onDismissRequest = onDismiss,
+    GlassDialog(
+        onDismiss = onDismiss,
         title = { Text("Your profile") },
-        text = {
+        buttons = {
+            TextButton(onDismiss) { Text("Cancel") }
+            TextButton({ onSave(name, handle, bio, photo) }) { Text("Save") }
+        },
+    ) {
             Column(Modifier.verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.clickable { AppLock.bypass(); pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
@@ -365,10 +369,7 @@ private fun EditProfileDialog(prefs: Prefs, onDismiss: () -> Unit, onSave: (Stri
                 OutlinedTextField(handle, { handle = it.take(24) }, label = { Text("Username") }, prefix = { Text("@") }, singleLine = true)
                 OutlinedTextField(bio, { bio = it.take(120) }, label = { Text("Bio") }, maxLines = 3)
             }
-        },
-        confirmButton = { TextButton({ onSave(name, handle, bio, photo) }) { Text("Save") } },
-        dismissButton = { TextButton(onDismiss) { Text("Cancel") } },
-    )
+    }
 }
 
 // ───────────────────────── SETTINGS ─────────────────────────

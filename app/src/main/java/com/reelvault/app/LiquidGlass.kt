@@ -11,11 +11,13 @@ import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CornerBasedShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.reelvault.app.backdrop.Backdrop
@@ -62,6 +64,15 @@ internal val glassEdgeColor: Color
 /** Glass body tint: light glass in light theme, dark glass in dark theme. */
 internal val glassTintColor: Color
     get() = if (Mono.dark) Color(0xFF121212) else Color(0xFFFAFAFA)
+
+/**
+ * Icon and label colour for content sitting on a glass surface (taken from Harsh Musix's glass nav bar):
+ * glass shows whatever is behind it, so the theme's onSurface greys have nothing dependable to sit on —
+ * pure black or white off the surface luminance is the only tint that holds.
+ */
+@Composable
+fun glassContentColor(): Color =
+    if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) Color.Black else Color.White
 
 /** Selected-pill fill on the glass dock: a soft white wash in dark theme, a soft black wash in light theme. */
 internal val glassIndicatorColor: Color

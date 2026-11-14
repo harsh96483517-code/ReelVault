@@ -376,28 +376,33 @@ private fun ReelPage(
         }
     }
 
-    if (confirmDelete) AlertDialog(
-        onDismissRequest = { confirmDelete = false },
+    if (confirmDelete) GlassDialog(
+        onDismiss = { confirmDelete = false },
         title = { Text("Delete permanently?") },
-        text = { Text("This video will be erased from your phone and can't be recovered.") },
-        confirmButton = { TextButton({ confirmDelete = false; actions.deleteForever(listOf(uri)) { onBack() } }) { Text("Delete") } },
-        dismissButton = { TextButton({ confirmDelete = false }) { Text("Cancel") } },
+        content = { Text("This video will be erased from your phone and can't be recovered.") },
+        buttons = {
+            TextButton({ confirmDelete = false }) { Text("Cancel") }
+            TextButton({ confirmDelete = false; actions.deleteForever(listOf(uri)) { onBack() } }) { Text("Delete") }
+        },
     )
-    if (info && e != null) AlertDialog(
-        onDismissRequest = { info = false }, confirmButton = { TextButton({ info = false }) { Text("Close") } },
+    if (info && e != null) GlassDialog(
+        onDismiss = { info = false },
         title = { Text("Video info") },
-        text = {
+        content = {
             Text("Name: ${e.name}\nFolder: ${e.folder}\nDuration: ${fmtDur(e.durationMs)}\nSize: ${fmtSize(e.size)}\nAdded: ${fmtDate(e.dateAdded)}")
         },
+        buttons = { TextButton({ info = false }) { Text("Close") } },
     )
     if (editCaption && e != null) {
         var text by remember { mutableStateOf(e.caption) }
-        AlertDialog(
-            onDismissRequest = { editCaption = false },
+        GlassDialog(
+            onDismiss = { editCaption = false },
             title = { Text("Caption") },
-            text = { OutlinedTextField(text, { text = it.take(200) }, maxLines = 4, placeholder = { Text("Good vibes only #reels") }) },
-            confirmButton = { TextButton({ vm.setCaption(uri, text); editCaption = false }) { Text("Save") } },
-            dismissButton = { TextButton({ editCaption = false }) { Text("Cancel") } },
+            content = { OutlinedTextField(text, { text = it.take(200) }, maxLines = 4, placeholder = { Text("Good vibes only #reels") }) },
+            buttons = {
+                TextButton({ editCaption = false }) { Text("Cancel") }
+                TextButton({ vm.setCaption(uri, text); editCaption = false }) { Text("Save") }
+            },
         )
     }
 }

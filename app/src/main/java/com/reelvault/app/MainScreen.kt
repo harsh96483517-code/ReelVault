@@ -156,15 +156,13 @@ fun MainScreen(vm: MainVm) {
     val hazeState = remember { HazeState() }
 
     update?.let { UpdateDialog(vm, it, progress, status) }
-    if (deleteDialog) androidx.compose.material3.AlertDialog(
-        onDismissRequest = { deleteDialog = false },
+    if (deleteDialog) GlassDialog(
+        onDismiss = { deleteDialog = false },
         title = { Text("Delete ${selected.size} video(s)?") },
-        text = { Text("Move to bin keeps them for about 30 days so you can restore them. Delete permanently erases them from your phone for good.") },
-        confirmButton = {
-            androidx.compose.material3.TextButton({ val l = selected.toList(); deleteDialog = false; selected.clear(); actions.trash(l) }) { Text("Move to bin") }
-        },
-        dismissButton = {
+        content = { Text("Move to bin keeps them for about 30 days so you can restore them. Delete permanently erases them from your phone for good.") },
+        buttons = {
             androidx.compose.material3.TextButton({ val l = selected.toList(); deleteDialog = false; selected.clear(); actions.deleteForever(l) }) { Text("Delete permanently") }
+            androidx.compose.material3.TextButton({ val l = selected.toList(); deleteDialog = false; selected.clear(); actions.trash(l) }) { Text("Move to bin") }
         },
     )
 
@@ -242,10 +240,10 @@ fun MainScreen(vm: MainVm) {
 
 @Composable
 private fun UpdateDialog(vm: MainVm, info: UpdateInfo, progress: Float?, status: String?) {
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = { if (progress == null) vm.dismissUpdate() },
+    GlassDialog(
+        onDismiss = { if (progress == null) vm.dismissUpdate() },
         title = { Text("Update available • v${info.version}") },
-        text = {
+        content = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(info.notes.trim().ifBlank { "A new version of ReelVault is ready." }.take(500))
                 if (info.size > 0) Text("Size: ${fmtSize(info.size)}", style = MaterialTheme.typography.bodySmall)
@@ -253,12 +251,12 @@ private fun UpdateDialog(vm: MainVm, info: UpdateInfo, progress: Float?, status:
                 if (status != null && progress == null) Text(status, style = MaterialTheme.typography.bodySmall, color = Pink)
             }
         },
-        confirmButton = {
+        buttons = {
+            androidx.compose.material3.TextButton({ vm.dismissUpdate() }, enabled = progress == null) { Text("Later") }
             androidx.compose.material3.TextButton({ vm.downloadAndInstall() }, enabled = progress == null) {
                 Text(if (progress == null) "Update now" else "Downloading…")
             }
         },
-        dismissButton = { androidx.compose.material3.TextButton({ vm.dismissUpdate() }, enabled = progress == null) { Text("Later") } },
     )
 }
 
@@ -430,7 +428,15 @@ private fun BottomBar(selected: Int, onSelect: (Int) -> Unit, onReels: () -> Uni
                             }
                         } else {
                             val t = tabOf(i)
-                            val c = if (t == selected) Violet else onSurface.copy(alpha = 0.72f)
+                            // On the glass dock the tint comes from the surface luminance (Musix's nav bar rule);
+                            // the haze fallback keeps the theme accents.
+                            val glassContent = glassContentColor()
+                            val c = when {
+                                glassOn && t == selected -> glassContent
+                                glassOn -> glassContent.copy(alpha = 0.65f)
+                                t == selected -> Violet
+                                else -> onSurface.copy(alpha = 0.72f)
+                            }
                             Box(Modifier.weight(1f).fillMaxHeight().bounceClick { onSelect(t) }, contentAlignment = Alignment.Center) {
                                 Icon(
                                     tabs[t].icon, tabs[t].label, tint = c,
