@@ -79,11 +79,9 @@ chooses Random or In order (continues from last played when "Remember last playe
   videos glide into their new places with a bounce when you hide/unhide/sort.
 
 
-## Profile & Instagram
-- Header bar is always black with the white chrome "Reel" wordmark (both themes).
-- Profile: banner + overlapping avatar, name, @handle, bio, stats, vault and settings rows.
-- Edit profile has an "Instagram username" field. The profile shows an `@username` button that opens your Instagram profile
-  (Instagram app if installed, otherwise the browser). No Instagram login or API is used by ReelVault.
+## Profile
+- Header bar is liquid glass and follows the theme (dark glass in dark mode, light glass in light mode) with the chrome "Reel" wordmark.
+- Profile: banner + overlapping avatar, name, @handle, bio, stats, vault and settings rows. (The Instagram link/button was removed.)
 - Videos you save from Instagram (e.g. your own reels via the reel's ⋯ > Download, or Settings > Your activity > Download your information)
   land in your phone storage and ReelVault finds them on the next scan.
 
@@ -99,6 +97,13 @@ chooses Random or In order (continues from last played when "Remember last playe
 
 
 ## Dock lens, glass menus, credits
-- Dock: drag the liquid-glass lens left/right (or tap an icon). It stretches like water, magnifies the icons under it and springs into place.
+- Dock: real liquid glass, same lens as Harsh Musix. Tap an icon or drag the lens left/right: it lifts past the dock edges, refracts the
+  icons, stretches/squashes with its own acceleration, rubber-bands at the ends, ticks across tabs and lands back into a flat pill.
+  Needs Android 12+ for the glass blur (13+ for the lens refraction); older phones get a flat tinted pill. Works in light and dark theme.
 - All popup menus (⋮ More, speed, sort) are liquid glass. The little white streak on glass edges was removed.
 - Logo: new "M" mark (app icon, header, lock screen). Settings > App Credits shows the developer card with photo.
+
+
+## Credits (liquid glass)
+- Glass rendering: [Kyant0/backdrop](https://github.com/Kyant0/backdrop) (Apache-2.0), vendored in `app/src/main/java/com/reelvault/app/backdrop`.
+- Dock lens motion: ported from Harsh Musix (`GlassSelectionPill`), itself ported from liquid_glass_easy (MIT).

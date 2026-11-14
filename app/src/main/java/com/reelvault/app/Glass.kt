@@ -201,9 +201,12 @@ fun LogoMark(size: Dp) {
 fun GlassIconButton(
     icon: ImageVector, desc: String, onClick: () -> Unit, modifier: Modifier = Modifier,
     size: Dp = 44.dp, tint: Color = MaterialTheme.colorScheme.onSurface,
+    /** Sits inside a glass bar already: a soft tinted circle instead of a second glass layer (readable in light mode). */
+    flat: Boolean = false,
 ) {
+    val base = if (flat) Modifier.clip(CircleShape).background(tint.copy(alpha = 0.10f)) else Modifier.glass(CircleShape)
     Box(
-        modifier.bounceClick(onClick = onClick).size(size).glass(CircleShape),
+        modifier.bounceClick(onClick = onClick).size(size).then(base),
         contentAlignment = Alignment.Center,
     ) { Icon(icon, desc, tint = tint, modifier = Modifier.size(size * 0.5f)) }
 }
