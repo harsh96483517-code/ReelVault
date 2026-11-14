@@ -5,6 +5,22 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.graphics.Color as AColor
 import androidx.activity.compose.BackHandler
+import kotlin.math.roundToInt
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
+import android.view.SurfaceView
+import android.view.PixelCopy
+import android.os.Looper
+import android.os.Handler
+import android.os.Build
+import android.graphics.Bitmap
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
@@ -20,6 +36,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -83,6 +100,7 @@ private class PlayerState(val player: ExoPlayer) {
     var fill by mutableStateOf(true)      // fill the screen (zoom) for portrait videos
     var portrait by mutableStateOf(true)
     var onEnded: () -> Unit = {}
+    var view: PlayerView? = null          // the live video view (used to grab a frame for the blurred menu)
 
     fun toggle() {
         if (player.isPlaying) { player.pause(); paused = true } else { player.play(); paused = false }
@@ -101,6 +119,7 @@ fun ReelsScreen(vm: MainVm, req: PlayRequest, onClose: () -> Unit) {
     val uris = req.uris
     if (uris.isEmpty()) { LaunchedEffect(Unit) { onClose() }; return }
     val scope = rememberCoroutineScope()
+    val actions = rememberMediaActions(vm)
     val prevDark = remember { Mono.dark }
     Mono.dark = true
     DisposableEffect(Unit) { onDispose { Mono.dark = prevDark } }
@@ -191,7 +210,7 @@ fun ReelsScreen(vm: MainVm, req: PlayRequest, onClose: () -> Unit) {
         MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(onSurface = Color.White, surface = Color(0xFF1C1C1C), surfaceContainer = Color(0xFF1C1C1C))) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             VerticalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 0, key = { uris[it] }) { page ->
-                ReelPage(uris[page], byUri[uris[page]], page == pager.settledPage, st, vm, prefs, onClose)
+                ReelPage(uris[page], byUri[uris[page]], page == pager.settledPage, st, vm, actions, prefs, onClose)
             }
         }
         }
@@ -201,12 +220,46 @@ fun ReelsScreen(vm: MainVm, req: PlayRequest, onClose: () -> Unit) {
 @OptIn(UnstableApi::class)
 @Composable
 private fun ReelPage(
-    uri: String, e: VideoEntity?, isCur: Boolean, st: PlayerState, vm: MainVm, prefs: Prefs, onBack: () -> Unit,
+    uri: String, e: VideoEntity?, isCur: Boolean, st: PlayerState, vm: MainVm, actions: MediaActions, prefs: Prefs, onBack: () -> Unit,
 ) {
     val ctx = LocalContext.current
+    var confirmDelete by remember { mutableStateOf(false) }
     var heart by remember { mutableStateOf(false) }
     var speedMenu by remember { mutableStateOf(false) }
     var moreMenu by remember { mutableStateOf(false) }
+    var backdrop by remember { mutableStateOf<Backdrop?>(null) }
+    fun openMenu(show: () -> Unit) { captureFrame(st.view) { b -> backdrop = b; show() } }
+    val speedItems: @Composable ColumnScope.() -> Unit = {
+        listOf(0.5f, 1f, 1.5f, 2f).forEach { sp ->
+            DropdownMenuItem(
+                text = { Text("${sp}x".replace(".0x", "x")) },
+                onClick = { st.speed = sp; st.player.setPlaybackSpeed(sp); speedMenu = false },
+            )
+        }
+    }
+    val moreItems: @Composable ColumnScope.() -> Unit = {
+        DropdownMenuItem({ Text("Edit caption") }, { moreMenu = false; editCaption = true }, leadingIcon = { Icon(Icons.Rounded.Edit, null) })
+        DropdownMenuItem({ Text("Video info") }, { moreMenu = false; info = true }, leadingIcon = { Icon(Icons.Rounded.Info, null) })
+        DropdownMenuItem({ Text("Open with…") }, {
+            moreMenu = false
+            val i = Intent(Intent.ACTION_VIEW).apply { setDataAndType(uri.toUri(), "video/*"); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            AppLock.bypass(); runCatching { ctx.startActivity(Intent.createChooser(i, "Open with")) }
+        }, leadingIcon = { Icon(Icons.Rounded.OpenInNew, null) })
+        DropdownMenuItem({ Text(if (st.fill) "Fill screen: on" else "Fill screen: off") }, {
+            st.fill = !st.fill; moreMenu = false
+        }, leadingIcon = { Icon(Icons.Rounded.Fullscreen, null) })
+        DropdownMenuItem({ Text(if (st.loop) "Loop: on" else "Loop: off") }, {
+            st.loop = !st.loop
+            st.player.repeatMode = if (st.loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+            moreMenu = false
+        }, leadingIcon = { Icon(Icons.Rounded.Repeat, null) })
+        DropdownMenuItem({ Text("Move to bin") }, {
+            moreMenu = false; actions.trash(listOf(uri)) { onBack() }
+        }, leadingIcon = { Icon(Icons.Rounded.Delete, null) })
+        DropdownMenuItem({ Text("Delete permanently") }, {
+            moreMenu = false; confirmDelete = true
+        }, leadingIcon = { Icon(Icons.Rounded.DeleteForever, null) })
+    }
     var info by remember { mutableStateOf(false) }
     var editCaption by remember { mutableStateOf(false) }
     var seeking by remember { mutableStateOf(false) }
@@ -230,13 +283,13 @@ private fun ReelPage(
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                     setShutterBackgroundColor(AColor.TRANSPARENT)
                     setKeepContentOnPlayerReset(true)
-                }
+                }.also { st.view = it }
             },
             update = {
                 it.player = st.player
                 it.resizeMode = if (st.fill && st.portrait) AspectRatioFrameLayout.RESIZE_MODE_ZOOM else AspectRatioFrameLayout.RESIZE_MODE_FIT
             },
-            onRelease = { it.player = null },
+            onRelease = { it.player = null; if (st.view === it) st.view = null },
         )
 
         // scrims
@@ -264,23 +317,15 @@ private fun ReelPage(
             exit = fadeOut() + scaleOut(),
         ) { Icon(Icons.Rounded.Favorite, null, tint = Color.White, modifier = Modifier.size(120.dp)) }
 
+        if (speedMenu || moreMenu) Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { speedMenu = false; moreMenu = false } })
+
         Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(horizontal = 14.dp, vertical = 10.dp)) {
             // Top bar
             Row(Modifier.align(Alignment.TopCenter).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 GlassIconButton(Icons.Rounded.ArrowBack, "Back", onBack, size = 42.dp, tint = Color.White)
                 Text("ReelVault", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.weight(1f))
-                Box {
-                    GlassChip("${st.speed}x".replace(".0x", "x"), { speedMenu = true }, icon = Icons.Rounded.Speed)
-                    DropdownMenu(speedMenu, { speedMenu = false }) {
-                        listOf(0.5f, 1f, 1.5f, 2f).forEach { s ->
-                            DropdownMenuItem(
-                                text = { Text("${s}x".replace(".0x", "x")) },
-                                onClick = { st.speed = s; st.player.setPlaybackSpeed(s); speedMenu = false },
-                            )
-                        }
-                    }
-                }
+                GlassChip("${st.speed}x".replace(".0x", "x"), { openMenu { speedMenu = true } }, icon = Icons.Rounded.Speed)
                 GlassIconButton(if (st.volume == 0f) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp, "Volume",
                     { st.showVol = !st.showVol }, size = 42.dp, tint = Color.White)
             }
@@ -292,6 +337,9 @@ private fun ReelPage(
                         colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(alpha = 0.3f)))
                 }
             }
+
+            BlurMenu(speedMenu, backdrop, Modifier.align(Alignment.TopEnd).padding(top = 58.dp, end = 50.dp), speedItems)
+            BlurMenu(moreMenu, backdrop, Modifier.align(Alignment.BottomEnd).padding(end = 4.dp, bottom = 150.dp), moreItems)
 
             // Bottom block: info + action rail side by side, glass controls underneath (nothing overlaps)
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -320,26 +368,7 @@ private fun ReelPage(
                             }
                             AppLock.bypass(); ctx.startActivity(Intent.createChooser(i, "Share video"))
                         }
-                        Box {
-                            RailButton(Icons.Rounded.MoreVert, "More", Color.White) { moreMenu = true }
-                            DropdownMenu(moreMenu, { moreMenu = false }) {
-                                DropdownMenuItem({ Text("Edit caption") }, { moreMenu = false; editCaption = true }, leadingIcon = { Icon(Icons.Rounded.Edit, null) })
-                                DropdownMenuItem({ Text("Video info") }, { moreMenu = false; info = true }, leadingIcon = { Icon(Icons.Rounded.Info, null) })
-                                DropdownMenuItem({ Text("Open with…") }, {
-                                    moreMenu = false
-                                    val i = Intent(Intent.ACTION_VIEW).apply { setDataAndType(uri.toUri(), "video/*"); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-                                    AppLock.bypass(); runCatching { ctx.startActivity(Intent.createChooser(i, "Open with")) }
-                                }, leadingIcon = { Icon(Icons.Rounded.OpenInNew, null) })
-                                DropdownMenuItem({ Text(if (st.fill) "Fill screen: on" else "Fill screen: off") }, {
-                                    st.fill = !st.fill; moreMenu = false
-                                }, leadingIcon = { Icon(Icons.Rounded.Fullscreen, null) })
-                                DropdownMenuItem({ Text(if (st.loop) "Loop: on" else "Loop: off") }, {
-                                    st.loop = !st.loop
-                                    st.player.repeatMode = if (st.loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
-                                    moreMenu = false
-                                }, leadingIcon = { Icon(Icons.Rounded.Repeat, null) })
-                            }
-                        }
+                        RailButton(Icons.Rounded.MoreVert, "More", Color.White) { openMenu { moreMenu = true } }
                     }
 
                 }
@@ -368,6 +397,13 @@ private fun ReelPage(
         }
     }
 
+    if (confirmDelete) AlertDialog(
+        onDismissRequest = { confirmDelete = false },
+        title = { Text("Delete permanently?") },
+        text = { Text("This video will be erased from your phone and can't be recovered.") },
+        confirmButton = { TextButton({ confirmDelete = false; actions.deleteForever(listOf(uri)) { onBack() } }) { Text("Delete") } },
+        dismissButton = { TextButton({ confirmDelete = false }) { Text("Cancel") } },
+    )
     if (info && e != null) AlertDialog(
         onDismissRequest = { info = false }, confirmButton = { TextButton({ info = false }) { Text("Close") } },
         title = { Text("Video info") },
@@ -438,5 +474,51 @@ private fun WaveSeekBar(value: Float, animate: Boolean, onChange: (Float) -> Uni
         // pill thumb
         drawRoundRect(Color.White, Offset(x - 2.5.dp.toPx(), cy - (if (dragging) 13.dp else 10.dp).toPx()),
             Size(5.dp.toPx(), (if (dragging) 26.dp else 20.dp).toPx()), CornerRadius(3.dp.toPx()))
+    }
+}
+
+private class Backdrop(val bmp: ImageBitmap, val w: Int, val h: Int)
+
+/** Grabs the current video frame (small copy) so the menu can show a real blurred backdrop over the video. */
+@OptIn(UnstableApi::class)
+private fun captureFrame(view: PlayerView?, onResult: (Backdrop?) -> Unit) {
+    val sv = view?.videoSurfaceView as? SurfaceView
+    if (sv == null || sv.width < 2 || sv.height < 2 || Build.VERSION.SDK_INT < 31) { onResult(null); return }
+    val bmp = Bitmap.createBitmap((sv.width / 6).coerceAtLeast(2), (sv.height / 6).coerceAtLeast(2), Bitmap.Config.ARGB_8888)
+    try {
+        PixelCopy.request(sv, bmp, { res ->
+            onResult(if (res == PixelCopy.SUCCESS) Backdrop(bmp.asImageBitmap(), sv.width, sv.height) else null)
+        }, Handler(Looper.getMainLooper()))
+    } catch (e: Exception) { onResult(null) }
+}
+
+/** Liquid-glass menu: the video frame behind it is blurred inside the panel, then smoked and edge-lit. */
+@Composable
+private fun BlurMenu(visible: Boolean, backdrop: Backdrop?, modifier: Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val root = LocalView.current
+    AnimatedVisibility(
+        visible, modifier,
+        enter = fadeIn() + scaleIn(spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMediumLow), 0.85f, TransformOrigin(1f, 1f)),
+        exit = fadeOut() + scaleOut(targetScale = 0.9f, transformOrigin = TransformOrigin(1f, 1f)),
+    ) {
+        var pos by remember { mutableStateOf(Offset.Zero) }
+        Box(Modifier.onGloballyPositioned { pos = it.positionInRoot() }.glass(RoundedCornerShape(22.dp), strong = true)) {
+            if (backdrop != null && Build.VERSION.SDK_INT >= 31) {
+                Image(
+                    backdrop.bmp, null,
+                    Modifier
+                        .layout { m, _ ->
+                            val p = m.measure(Constraints.fixed(backdrop.w, backdrop.h))
+                            val x = ((root.width - backdrop.w) / 2f - pos.x).roundToInt()      // frame is centred on the screen
+                            val y = ((root.height - backdrop.h) / 2f - pos.y).roundToInt()
+                            layout(0, 0) { p.place(x, y) }
+                        }
+                        .blur(16.dp, BlurredEdgeTreatment.Unbounded),
+                    contentScale = ContentScale.FillBounds,
+                )
+                Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.36f)))
+            }
+            Column(Modifier.width(IntrinsicSize.Max).padding(vertical = 8.dp), content = content)
+        }
     }
 }

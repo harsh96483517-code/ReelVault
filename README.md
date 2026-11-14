@@ -86,3 +86,31 @@ chooses Random or In order (continues from last played when "Remember last playe
   (Instagram app if installed, otherwise the browser). No Instagram login or API is used by ReelVault.
 - Videos you save from Instagram (e.g. your own reels via the reel's ⋯ > Download, or Settings > Your activity > Download your information)
   land in your phone storage and ReelVault finds them on the next scan.
+
+
+## Delete, bin & black glass
+- Long-press to select videos > trash icon: **Move to bin** (Android trash, ~30 days) or **Delete permanently**.
+  In the player: More (⋮) > Move to bin / Delete permanently. Library > Bin: restore or erase for good / empty the bin.
+- Android 11+ shows its own "Allow ReelVault to delete?" confirmation (required by Android). Bin needs Android 11+.
+  Videos in folders you added with the folder picker can only be deleted permanently (and the folder must be re-added once
+  so ReelVault has write access).
+- Dark theme and everything over video now uses black liquid glass: smoked body, top highlight, bottom caustic,
+  inner edge ring, specular rim and glint. Light theme stays clean white cards.
+
+
+## Dock lens, glass menus, credits
+- Dock: drag the liquid-glass lens left/right (or tap an icon). It stretches like water, magnifies the icons under it and springs into place.
+- All popup menus (⋮ More, speed, sort) are liquid glass. The little white streak on glass edges was removed.
+- Logo: new "M" mark (app icon, header, lock screen). Settings > App Credits shows the developer card with photo.
+
+
+## Blur
+- Only the bottom drag dock uses real backdrop blur, with the v1.5 frosted style (`glassFrosted`, Haze 28dp, light white tint).
+- Everything else uses the current black liquid glass with no backdrop blur (cheaper on a 6 GB phone).
+
+
+## Light-theme logo & blurred reel menus
+- Light theme no longer shows a black box: header = white card + black M logo; profile banner and lock-screen tile are light too.
+  Dark theme keeps the black bar + white M logo.
+- The reel's ⋮ More and speed menus show a real blurred copy of the video frame behind them (Android 12+),
+  then a black smoke tint and the liquid-glass edge lighting. Tap outside to close.

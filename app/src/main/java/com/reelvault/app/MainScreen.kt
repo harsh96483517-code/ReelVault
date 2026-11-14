@@ -9,6 +9,22 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+import kotlin.math.abs
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.graphics.drawscope.inset
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -109,6 +125,9 @@ fun MainScreen(vm: MainVm) {
     val toggle: (String) -> Unit = { u -> if (u in selected) selected.remove(u) else selected.add(u) }
     var vault by remember { mutableStateOf(false) }
     var vaultAuth by remember { mutableStateOf(false) }
+    var bin by remember { mutableStateOf(false) }
+    var deleteDialog by remember { mutableStateOf(false) }
+    val actions = rememberMediaActions(vm)
     LaunchedEffect(tab) { selected.clear() }
     DisposableEffect(vault) {
         AppLock.vaultOpen = vault
@@ -127,11 +146,23 @@ fun MainScreen(vm: MainVm) {
     val hazeState = remember { HazeState() }
 
     update?.let { UpdateDialog(vm, it, progress, status) }
+    if (deleteDialog) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { deleteDialog = false },
+        title = { Text("Delete ${selected.size} video(s)?") },
+        text = { Text("Move to bin keeps them for about 30 days so you can restore them. Delete permanently erases them from your phone for good.") },
+        confirmButton = {
+            androidx.compose.material3.TextButton({ val l = selected.toList(); deleteDialog = false; selected.clear(); actions.trash(l) }) { Text("Move to bin") }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton({ val l = selected.toList(); deleteDialog = false; selected.clear(); actions.deleteForever(l) }) { Text("Delete permanently") }
+        },
+    )
 
     when {
         req != null -> ReelsScreen(vm, req!!) { req = null }
         vaultAuth -> UnlockPanel("Hidden vault", "Verify it's you", onSuccess = { vaultAuth = false; vault = true }, onCancel = { vaultAuth = false })
         vault -> VaultScreen(vm, onBack = { vault = false }, onPlay = { req = it })
+        bin -> BinScreen(vm, actions) { bin = false }
         settings -> SettingsScreen(vm) { settings = false }
         else -> {
             BackHandler(enabled = selected.isNotEmpty() || tab != 0 || search) {
@@ -158,7 +189,7 @@ fun MainScreen(vm: MainVm) {
                         ) { t ->
                             when (t) {
                                 0 -> HomeScreen(vm, perm, { askPerm() }, search, topPad, bottomPad, homeGrid, homeList, selected, toggle) { uris, i -> req = PlayRequest(uris, i) }
-                                1 -> LibraryScreen(vm, perm, { askPerm() }, topPad, bottomPad) { folder -> vm.folderFilter.value = folder; tab = 0 }
+                                1 -> LibraryScreen(vm, perm, { askPerm() }, topPad, bottomPad, { bin = true }) { folder -> vm.folderFilter.value = folder; tab = 0 }
                                 2 -> FavoritesScreen(vm, topPad, bottomPad, selected, toggle) { req = it }
                                 else -> ProfileScreen(vm, topPad, bottomPad, openVault) { settings = true }
                             }
@@ -176,6 +207,7 @@ fun MainScreen(vm: MainVm) {
                             vm.hide(selected.toList()); selected.clear()
                             android.widget.Toast.makeText(ctx, "$n hidden. Find them in Profile > Hidden vault.", android.widget.Toast.LENGTH_LONG).show()
                         },
+                        { deleteDialog = true },
                         Modifier.align(Alignment.TopCenter),
                     )
                     BottomBar(tab, { tab = it }, startReels, Modifier.align(Alignment.BottomCenter))
@@ -209,7 +241,7 @@ private fun UpdateDialog(vm: MainVm, info: UpdateInfo, progress: Float?, status:
 
 @Composable
 private fun SelectionBar(
-    count: Int, onClose: () -> Unit, onAll: () -> Unit, onFav: () -> Unit, onHide: () -> Unit, modifier: Modifier,
+    count: Int, onClose: () -> Unit, onAll: () -> Unit, onFav: () -> Unit, onHide: () -> Unit, onDelete: () -> Unit, modifier: Modifier,
 ) {
     val onSurface = MaterialTheme.colorScheme.onSurface
     Row(
@@ -222,48 +254,125 @@ private fun SelectionBar(
         GlassIconButton(Icons.Rounded.SelectAll, "Select all", onAll, size = 40.dp)
         GlassIconButton(Icons.Rounded.FavoriteBorder, "Add to favorites", onFav, size = 40.dp)
         GlassIconButton(Icons.Rounded.VisibilityOff, "Hide", onHide, size = 40.dp)
+        GlassIconButton(Icons.Rounded.Delete, "Delete", onDelete, size = 40.dp)
     }
 }
 
 @Composable
 private fun TopHeader(showSearch: Boolean, searchOn: Boolean, onSearch: () -> Unit, onSettings: () -> Unit, modifier: Modifier) {
+    val dark = LocalDark.current
     val shape = RoundedCornerShape(30.dp)
-    // The logo bar is always black (both themes) so the chrome wordmark looks its best.
-    CompositionLocalProvider(LocalDark provides true, LocalHaze provides null) {
-        Row(
-            modifier.statusBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().height(60.dp)
-                .clip(shape).background(Color.Black).border(1.dp, Color.White.copy(alpha = 0.22f), shape).padding(horizontal = 10.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Wordmark(Modifier.weight(1f).height(40.dp).padding(start = 8.dp), dark = true)
-            if (showSearch) GlassIconButton(if (searchOn) Icons.Rounded.Close else Icons.Rounded.Search, "Search", onSearch, size = 40.dp, tint = Color.White)
-            GlassIconButton(Icons.Rounded.Settings, "Settings", onSettings, size = 40.dp, tint = Color.White)
-        }
+    // Dark theme: solid black bar + white logo. Light theme: clean white card + black logo (no black box).
+    Row(
+        modifier.statusBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().height(60.dp)
+            .then(
+                if (dark) Modifier.clip(shape).background(Color.Black).border(1.dp, Color.White.copy(alpha = 0.22f), shape)
+                else Modifier.glass(shape, strong = true)
+            )
+            .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Wordmark(Modifier.weight(1f).height(44.dp).padding(start = 8.dp), dark = dark)
+        if (showSearch) GlassIconButton(if (searchOn) Icons.Rounded.Close else Icons.Rounded.Search, "Search", onSearch, size = 40.dp)
+        GlassIconButton(Icons.Rounded.Settings, "Settings", onSettings, size = 40.dp)
     }
 }
 
+/**
+ * Icon dock with a draggable liquid-glass lens. Drag the lens along the dock (or tap an icon): it follows the
+ * finger, stretches like a water drop, magnifies the icons under it and springs into place on release.
+ * The centre ▶ button plays reels directly.
+ */
 @Composable
 private fun BottomBar(selected: Int, onSelect: (Int) -> Unit, onReels: () -> Unit, modifier: Modifier) {
     val dark = LocalDark.current
     val onSurface = MaterialTheme.colorScheme.onSurface
+    val haptic = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    val pad = with(LocalDensity.current) { 6.dp.toPx() }
     BoxWithConstraints(
-        modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp).fillMaxWidth().height(68.dp)
-            .glass(RoundedCornerShape(34.dp), strong = true).padding(6.dp),
+        modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp).fillMaxWidth().height(68.dp),
     ) {
-        val slotW = maxWidth / 5
-        val slot = if (selected >= 2) selected + 1 else selected   // slot 2 is the Reels button
-        // liquid lens that glides to the selected icon with a springy overshoot
-        val targetX = slotW * slot
-        val x by animateDpAsState(targetX, spring(Spring.DampingRatioLowBouncy, Spring.StiffnessMediumLow), label = "lens")
-        val stretch = (kotlin.math.abs((targetX - x).value) / slotW.value).coerceIn(0f, 1f)   // water-drop stretch while moving
+        val slotPx = (constraints.maxWidth - 2 * pad) / 5f
+        fun slotOf(t: Int) = if (t >= 2) t + 1 else t
+        fun tabOf(s: Int) = if (s > 2) s - 1 else s
+        val lens = remember { Animatable(0f) }
+        var dragging by remember { mutableStateOf(false) }
+        var placed by remember { mutableStateOf(false) }
+        var dragX by remember { mutableFloatStateOf(0f) }
+        val springSpec = spring<Float>(Spring.DampingRatioLowBouncy, Spring.StiffnessMediumLow)
+
+        LaunchedEffect(selected, slotPx) {
+            if (dragging) return@LaunchedEffect
+            val target = slotPx * slotOf(selected)
+            if (!placed) { lens.snapTo(target); placed = true } else lens.animateTo(target, springSpec)
+        }
+        fun settle() {
+            val pos = lens.value / slotPx
+            val raw = pos.roundToInt().coerceIn(0, 4)
+            val s = if (raw == 2) (if (pos < 2f) 1 else 3) else raw     // the lens never rests on the ▶ button
+            dragging = false
+            if (tabOf(s) != selected) onSelect(tabOf(s))
+            scope.launch { lens.animateTo(slotPx * s, springSpec) }
+        }
+
+        // dock body
+        Box(Modifier.fillMaxSize().glassFrosted(RoundedCornerShape(34.dp), strong = true))
+
+        // the liquid-glass lens (bigger than the dock, so it bulges out of it)
+        val lensScale by animateFloatAsState(if (dragging) 1.10f else 1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow), label = "lensScale")
+        val restPx = slotPx * slotOf(selected)
         Box(
-            Modifier.offset(x = x).width(slotW).fillMaxHeight()
-                .graphicsLayer { scaleX = 1f + 0.40f * stretch; scaleY = 1f - 0.12f * stretch }
-                .clip(RoundedCornerShape(28.dp))
-                .background(if (dark) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.07f))
-                .border(1.dp, if (dark) Color.White.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.18f), RoundedCornerShape(28.dp))
+            Modifier
+                .layout { m, _ ->
+                    val w = (slotPx + 10.dp.toPx()).roundToInt()
+                    val h = 78.dp.toPx().roundToInt()
+                    val p = m.measure(Constraints.fixed(w, h))
+                    layout(0, 0) { p.place((pad + lens.value - 5.dp.toPx()).roundToInt(), (-5.dp.toPx()).roundToInt()) }
+                }
+                .graphicsLayer {
+                    val stretch = (abs(lens.value - restPx) / slotPx).coerceIn(0f, 1f)
+                    scaleX = (1f + 0.30f * stretch) * lensScale
+                    scaleY = (1f - 0.10f * stretch) * lensScale
+                }
+                .drawWithContent {
+                    drawContent()
+                    val r = CornerRadius(size.height / 2f)
+                    val ink = if (dark) Color.White else Color.Black
+                    val k = if (dark) 1f else 0.8f
+                    drawRoundRect(ink.copy(alpha = 0.10f * k), cornerRadius = r)                                   // clear body
+                    drawRoundRect(Brush.verticalGradient(0f to ink.copy(alpha = 0.22f * k), 0.5f to Color.Transparent), cornerRadius = r)   // sheen
+                    drawRoundRect(Brush.verticalGradient(0.70f to Color.Transparent, 1f to ink.copy(alpha = 0.14f * k)), cornerRadius = r) // caustic
+                    inset(3.dp.toPx()) {
+                        drawRoundRect(ink.copy(alpha = 0.18f * k), cornerRadius = CornerRadius(size.height / 2f), style = Stroke(1.dp.toPx()))
+                    }
+                    drawRoundRect(                                                                              // specular rim
+                        Brush.linearGradient(
+                            0f to ink.copy(alpha = 0.90f * k), 0.35f to ink.copy(alpha = 0.10f * k),
+                            0.70f to ink.copy(alpha = 0.08f * k), 1f to ink.copy(alpha = 0.60f * k),
+                            start = Offset.Zero, end = Offset(size.width, size.height)),
+                        cornerRadius = r, style = Stroke(1.6.dp.toPx()),
+                    )
+                }
         )
-        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+
+        // icons (+ drag handling for the whole dock)
+        Row(
+            Modifier.fillMaxSize().padding(6.dp).pointerInput(slotPx) {
+                detectHorizontalDragGestures(
+                    onDragStart = { dragging = true; dragX = lens.value },
+                    onDragEnd = { settle() },
+                    onDragCancel = { settle() },
+                ) { change, dx ->
+                    change.consume()
+                    val before = (dragX / slotPx).roundToInt()
+                    dragX = (dragX + dx).coerceIn(0f, slotPx * 4)
+                    if ((dragX / slotPx).roundToInt() != before) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    scope.launch { lens.snapTo(dragX) }
+                }
+            },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             for (i in 0..4) {
                 if (i == 2) {
                     Box(Modifier.weight(1f).fillMaxHeight().bounceClick(onClick = onReels), contentAlignment = Alignment.Center) {
@@ -272,12 +381,17 @@ private fun BottomBar(selected: Int, onSelect: (Int) -> Unit, onReels: () -> Uni
                         }
                     }
                 } else {
-                    val t = if (i > 2) i - 1 else i
-                    val sel = t == selected
-                    val grow by animateFloatAsState(if (sel) 1f else 0f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium), label = "tab")
-                    val c = if (sel) Violet else onSurface.copy(alpha = 0.72f)
+                    val t = tabOf(i)
+                    val c = if (t == selected) Violet else onSurface.copy(alpha = 0.72f)
                     Box(Modifier.weight(1f).fillMaxHeight().bounceClick { onSelect(t) }, contentAlignment = Alignment.Center) {
-                        Icon(tabs[t].icon, tabs[t].label, tint = c, modifier = Modifier.size(27.dp).scale(1f + 0.15f * grow))
+                        Icon(
+                            tabs[t].icon, tabs[t].label, tint = c,
+                            modifier = Modifier.size(27.dp).graphicsLayer {
+                                val d = abs(i * slotPx - lens.value) / slotPx
+                                val sc = 1f + 0.28f * (1f - d).coerceIn(0f, 1f)      // icons under the lens get magnified
+                                scaleX = sc; scaleY = sc
+                            },
+                        )
                     }
                 }
             }

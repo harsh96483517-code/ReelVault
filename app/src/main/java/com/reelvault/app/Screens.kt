@@ -91,7 +91,7 @@ fun HomeScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box {
                     GlassChip(sortNames[prefs.sort], { sortMenu = true }, icon = Icons.Rounded.Sort)
-                    DropdownMenu(sortMenu, { sortMenu = false }) {
+                    GlassMenu(sortMenu, { sortMenu = false }) {
                         sortNames.forEachIndexed { i, n ->
                             DropdownMenuItem(text = { Text(n) }, onClick = { vm.setPref { it[K.sort] = i }; sortMenu = false })
                         }
@@ -145,7 +145,7 @@ fun HomeScreen(
 // ───────────────────────── LIBRARY ─────────────────────────
 @Composable
 fun LibraryScreen(
-    vm: MainVm, perm: Boolean, askPerm: () -> Unit, topPad: Dp, bottomPad: Dp, onOpenFolder: (String) -> Unit,
+    vm: MainVm, perm: Boolean, askPerm: () -> Unit, topPad: Dp, bottomPad: Dp, onBin: () -> Unit, onOpenFolder: (String) -> Unit,
 ) {
     val folders by vm.folders.collectAsState()
     val prefs by vm.prefs.collectAsState()
@@ -159,6 +159,19 @@ fun LibraryScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item { Text("Library", style = MaterialTheme.typography.titleLarge, color = onSurface) }
+        item {
+            Row(
+                Modifier.fillMaxWidth().bounceClick(onClick = onBin).glass(RoundedCornerShape(18.dp)).padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(Icons.Rounded.Delete, null, tint = onSurface)
+                Column(Modifier.weight(1f)) {
+                    Text("Bin", color = onSurface, fontWeight = FontWeight.Medium)
+                    Text("Restore deleted videos or erase them for good", style = MaterialTheme.typography.bodySmall, color = onSurface.copy(alpha = 0.6f))
+                }
+                Icon(Icons.Rounded.ChevronRight, null, tint = onSurface.copy(alpha = 0.5f))
+            }
+        }
         item {
             GlassCard {
                 Text("Scan your phone for videos. Folders you add are read-only; originals are never changed.",
@@ -276,11 +289,14 @@ fun ProfileScreen(vm: MainVm, topPad: Dp, bottomPad: Dp, onVault: () -> Unit, on
         Box(Modifier.fillMaxWidth()) {
             Box(
                 Modifier.fillMaxWidth().height(136.dp).clip(bannerShape)
-                    .background(Brush.verticalGradient(listOf(Color(0xFF2C2C2C), Color.Black)))
-                    .border(1.dp, Color.White.copy(alpha = 0.2f), bannerShape),
+                    .background(
+                        if (Mono.dark) Brush.verticalGradient(listOf(Color(0xFF2C2C2C), Color.Black))
+                        else Brush.verticalGradient(listOf(Color.White, Color(0xFFEDEDED)))
+                    )
+                    .border(1.dp, if (Mono.dark) Color.White.copy(alpha = 0.2f) else Color(0xFFDDDDDD), bannerShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Wordmark(Modifier.height(74.dp).padding(bottom = 6.dp), dark = true)
+                Wordmark(Modifier.height(74.dp).padding(bottom = 6.dp), dark = Mono.dark)
             }
             Box(Modifier.align(Alignment.BottomCenter).offset(y = 54.dp)) { Avatar(prefs.avatar, prefs.name, 108.dp) }
         }
@@ -401,12 +417,13 @@ fun SettingsScreen(vm: MainVm, onBack: () -> Unit) {
     when (flow) {
         "set" -> { PatternSetup({ flow = null; tick++ }, { flow = null }); return }
         "change" -> { UnlockPanel("Change pattern", "Draw your current pattern", { flow = "set" }, { flow = null }); return }
+        "credits" -> { CreditsScreen { flow = null }; return }
         "remove" -> { UnlockPanel("Remove lock", "Draw your pattern to confirm", { AppLock.clear(); flow = null; tick++ }, { flow = null }); return }
     }
 
-    CompositionLocalProvider(LocalHaze provides (if (SafeMode.on) null else haze)) {
+    CompositionLocalProvider(LocalHaze provides null) {
         Box(Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxSize().then(if (SafeMode.on) Modifier else Modifier.haze(haze))) {
+            Box(Modifier.fillMaxSize()) {
               CompositionLocalProvider(LocalHaze provides null) {
                 AppBackground()
                 Column(
@@ -511,6 +528,14 @@ fun SettingsScreen(vm: MainVm, onBack: () -> Unit) {
                             ctx.cacheDir.listFiles()?.forEach { runCatching { it.deleteRecursively() } }
                             cleared = true
                         }, icon = Icons.Rounded.Delete)
+                    }
+                    Row(
+                        Modifier.fillMaxWidth().bounceClick { flow = "credits" }.glass(RoundedCornerShape(20.dp)).padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Icon(Icons.Rounded.Info, null, tint = Violet)
+                        Text("App Credits", Modifier.weight(1f), color = onSurface, fontWeight = FontWeight.Medium)
+                        Icon(Icons.Rounded.ChevronRight, null, tint = onSurface.copy(alpha = 0.5f))
                     }
                     Text("ReelVault • plays offline • no ads • no login", Modifier.fillMaxWidth(),
                         textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall, color = onSurface.copy(alpha = 0.5f))
