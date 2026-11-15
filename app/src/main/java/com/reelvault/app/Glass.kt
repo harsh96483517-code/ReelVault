@@ -254,7 +254,12 @@ fun GlassMenu(expanded: Boolean, onDismiss: () -> Unit, content: @Composable Col
             androidx.compose.material3.MaterialTheme(
                 colorScheme = MaterialTheme.colorScheme.copy(onSurface = Color.White, onSurfaceVariant = Color.White.copy(alpha = 0.85f)),
             ) {
-                Column(Modifier.background(Color(0xCC101014)).glass(shape, strong = true).padding(vertical = 4.dp), content = content)
+                // Clip before the tint: a square background under a rounded glass leaves black wedges
+                // in the four corners of the popup.
+                Column(
+                    Modifier.clip(shape).background(Color(0xE6101014)).glass(shape, strong = true).padding(vertical = 4.dp),
+                    content = content,
+                )
             }
         }
     }
