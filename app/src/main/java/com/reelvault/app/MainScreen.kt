@@ -9,6 +9,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import com.reelvault.app.floatingtabbar.rememberFloatingTabBarScrollConnection
+import com.reelvault.app.backdrop.backdrops.rememberLayerBackdrop
+import com.reelvault.app.backdrop.backdrops.layerBackdrop
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import kotlin.math.abs
@@ -172,9 +177,30 @@ fun MainScreen(vm: MainVm) {
             val topPad = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 80.dp
             val bottomPad = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 110.dp
 
-            CompositionLocalProvider(LocalHaze provides (if (SafeMode.on) null else hazeState)) {
+            // BitChord-style liquid-glass dock: the page is recorded into a layer that the glass samples.
+            val useGlassDock = isGlassSupported() && !SafeMode.on
+            val windowBackground = MaterialTheme.colorScheme.background
+            val paintBackdrop: ContentDrawScope.() -> Unit = remember(windowBackground) { { drawRect(windowBackground); drawContent() } }
+            val appBackdrop = rememberLayerBackdrop(onDraw = paintBackdrop)
+            val navScroll = rememberFloatingTabBarScrollConnection()
+            val dockTabs = remember {
+                listOf(
+                    BottomTab("Home", Icons.Rounded.Home), BottomTab("Library", Icons.Rounded.VideoLibrary),
+                    BottomTab("Favorites", Icons.Rounded.Favorite), BottomTab("Profile", Icons.Rounded.Person),
+                    BottomTab("Reels", Icons.Rounded.PlayArrow),     // standalone circle = play reels
+                )
+            }
+            CompositionLocalProvider(
+                LocalHaze provides (if (SafeMode.on) null else hazeState),
+                LocalAppBackdrop provides appBackdrop,
+            ) {
                 Box(Modifier.fillMaxSize()) {
-                    Box(Modifier.fillMaxSize().then(if (SafeMode.on) Modifier else Modifier.haze(hazeState))) {
+                    Box(
+                        Modifier.fillMaxSize().then(
+                            if (useGlassDock) Modifier.layerBackdrop(appBackdrop).nestedScroll(navScroll)
+                            else if (SafeMode.on) Modifier else Modifier.haze(hazeState)
+                        )
+                    ) {
                       // Content INSIDE the haze source must not use hazeChild itself (it would blur itself and crash).
                       CompositionLocalProvider(LocalHaze provides null) {
                         AppBackground()
@@ -210,7 +236,11 @@ fun MainScreen(vm: MainVm) {
                         { deleteDialog = true },
                         Modifier.align(Alignment.TopCenter),
                     )
-                    BottomBar(tab, { tab = it }, startReels, Modifier.align(Alignment.BottomCenter))
+                    if (useGlassDock) GlassNavBar(
+                        tabs = dockTabs, selectedIndex = tab,
+                        onTabSelected = { i -> if (i == dockTabs.lastIndex) startReels() else tab = i },
+                        scrollConnection = navScroll, modifier = Modifier.align(Alignment.BottomCenter),
+                    ) else FallbackBar(tab, { tab = it }, startReels, Modifier.align(Alignment.BottomCenter))
                 }
             }
         }
@@ -284,7 +314,7 @@ private fun TopHeader(showSearch: Boolean, searchOn: Boolean, onSearch: () -> Un
  * The centre ▶ button plays reels directly.
  */
 @Composable
-private fun BottomBar(selected: Int, onSelect: (Int) -> Unit, onReels: () -> Unit, modifier: Modifier) {
+private fun FallbackBar(selected: Int, onSelect: (Int) -> Unit, onReels: () -> Unit, modifier: Modifier) {
     val dark = LocalDark.current
     val onSurface = MaterialTheme.colorScheme.onSurface
     val haptic = LocalHapticFeedback.current

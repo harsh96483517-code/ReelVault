@@ -114,3 +114,13 @@ chooses Random or In order (continues from last played when "Remember last playe
   Dark theme keeps the black bar + white M logo.
 - The reel's ⋮ More and speed menus show a real blurred copy of the video frame behind them (Android 12+),
   then a black smoke tint and the liquid-glass edge lighting. Tap outside to close.
+
+
+## Dock (BitChord-style liquid glass)
+- The bottom dock is the same floating glass tab bar as in the BitChord fork you shared: a pill of tabs + a standalone circle (▶ Reels),
+  real backdrop blur and lens refraction (Android 12+, refraction on 13+), a draggable glass selection lens with haptic ticks,
+  and it folds to the selected tab when you scroll down.
+- Code: `backdrop/` (Kyant0), `floatingtabbar/` (FloatingTabBar + GlassSelectionPill), `GlassSupport.kt`, `Dock.kt`, `Haptics.kt`.
+  The page is recorded into a layer in `MainScreen.kt` (`layerBackdrop` + `nestedScroll`).
+- Android 11 or older (or safe mode) uses the earlier simple dock as a fallback.
+- **License:** this includes GPL-3.0 code, so ReelVault is now GPL-3.0 (see `LICENSE` and `NOTICE.md`).

@@ -65,6 +65,11 @@ fun CreditsScreen(onBack: () -> Unit) {
                     Text("Made with passion. Built for the next generation.", Modifier.fillMaxWidth(),
                         color = ink.copy(alpha = 0.75f), textAlign = TextAlign.Center, fontStyle = FontStyle.Italic)
                 }
+                Text(
+                    "Dock & liquid glass are based on open-source work: BitChord and Echo Music (GPL-3.0), " +
+                        "compose-floating-tab-bar by Elyes Mansour and Kyant0/backdrop (Apache-2.0).",
+                    color = ink.copy(alpha = 0.5f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center,
+                )
                 Text("ReelVault v${Updater.currentVersion(ctx)}", color = ink.copy(alpha = 0.5f), style = MaterialTheme.typography.bodySmall)
             }
         }
