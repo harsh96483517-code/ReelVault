@@ -141,7 +141,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { kotlinx.coroutines.delay(200); refresh() }
     }
 
-    fun saveProfile(name: String, handle: String, bio: String, instagram: String, avatar: Uri?) = io {
+    fun saveProfile(name: String, handle: String, bio: String, instagram: String, avatar: Uri?, banner: Uri? = null, clearBanner: Boolean = false) = io {
         val app = getApplication<Application>()
         var path: String? = null
         if (avatar != null) {
@@ -152,7 +152,19 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                 path = f.absolutePath
             }
         }
+        var bannerPath: String? = null
+        if (banner != null) {
+            runCatching {
+                val f = File(app.filesDir, "banner_${System.currentTimeMillis()}.jpg")
+                app.contentResolver.openInputStream(banner)?.use { i -> f.outputStream().use { o -> i.copyTo(o) } }
+                File(prefs.value.banner).takeIf { it.isFile }?.delete()
+                bannerPath = f.absolutePath
+            }
+        } else if (clearBanner) {
+            File(prefs.value.banner).takeIf { it.isFile }?.delete()
+        }
         repo.edit {
+            if (bannerPath != null) it[K.banner] = bannerPath!! else if (clearBanner && banner == null) it.remove(K.banner)
             it[K.name] = name.trim()
             it[K.handle] = handle.trim().removePrefix("@").replace(" ", "_")
             it[K.bio] = bio.trim()

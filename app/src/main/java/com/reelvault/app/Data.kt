@@ -98,6 +98,7 @@ object K {
     val autoUpdate = booleanPreferencesKey("auto_update")
     val updateRepo = stringPreferencesKey("update_repo")
     val instagram = stringPreferencesKey("profile_instagram")
+    val banner = stringPreferencesKey("profile_banner")
 }
 
 data class Prefs(
@@ -118,6 +119,7 @@ data class Prefs(
     val autoUpdate: Boolean = true,
     val updateRepo: String = "",
     val instagram: String = "",
+    val banner: String = "",
 )
 
 class SettingsRepo(private val ctx: Context) {
@@ -133,6 +135,7 @@ class SettingsRepo(private val ctx: Context) {
                 reelsRandom = p[K.reelsRandom] ?: true, autoUpdate = p[K.autoUpdate] ?: true,
                 updateRepo = p[K.updateRepo] ?: "",
                 instagram = p[K.instagram] ?: "",
+                banner = p[K.banner] ?: "",
             )
         }
 

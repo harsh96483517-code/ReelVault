@@ -265,7 +265,10 @@ fun ProfileScreen(vm: MainVm, topPad: Dp, bottomPad: Dp, onVault: () -> Unit, on
                     .border(1.dp, Color.White.copy(alpha = 0.2f), bannerShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Wordmark(Modifier.height(80.dp).padding(bottom = 6.dp), dark = true)
+                if (prefs.banner.isNotBlank()) {
+                    AsyncImage(java.io.File(prefs.banner), null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+                    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.35f)))))
+                } else Wordmark(Modifier.height(80.dp).padding(bottom = 6.dp), dark = true)
             }
             Box(Modifier.align(Alignment.BottomCenter).offset(y = 54.dp)) { Avatar(prefs.avatar, prefs.name, 108.dp) }
         }
@@ -316,7 +319,7 @@ fun ProfileScreen(vm: MainVm, topPad: Dp, bottomPad: Dp, onVault: () -> Unit, on
             Icon(Icons.Rounded.ChevronRight, null, tint = onSurface.copy(alpha = 0.5f))
         }
     }
-    if (editing) EditProfileDialog(prefs, { editing = false }) { n, h, b, ig, a -> vm.saveProfile(n, h, b, ig, a); editing = false }
+    if (editing) EditProfileDialog(prefs, { editing = false }) { n, h, b, ig, a, bn, cb -> vm.saveProfile(n, h, b, ig, a, bn, cb); editing = false }
 }
 
 @Composable
@@ -328,11 +331,14 @@ private fun Stat(label: String, value: String, modifier: Modifier) {
 }
 
 @Composable
-private fun EditProfileDialog(prefs: Prefs, onDismiss: () -> Unit, onSave: (String, String, String, String, Uri?) -> Unit) {
+private fun EditProfileDialog(prefs: Prefs, onDismiss: () -> Unit, onSave: (String, String, String, String, Uri?, Uri?, Boolean) -> Unit) {
     var name by remember { mutableStateOf(prefs.name) }
     var handle by remember { mutableStateOf(prefs.handle) }
     var bio by remember { mutableStateOf(prefs.bio) }
     var photo by remember { mutableStateOf<Uri?>(null) }
+    var bannerPhoto by remember { mutableStateOf<Uri?>(null) }
+    var clearBanner by remember { mutableStateOf(false) }
+    val pickBanner = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { if (it != null) { bannerPhoto = it; clearBanner = false } }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { if (it != null) photo = it }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -347,12 +353,27 @@ private fun EditProfileDialog(prefs: Prefs, onDismiss: () -> Unit, onSave: (Stri
                     Icon(Icons.Rounded.CameraAlt, "Change photo", tint = OnAccent,
                         modifier = Modifier.align(Alignment.BottomEnd).size(30.dp).clip(CircleShape).background(Violet).padding(6.dp))
                 }
+                Box(
+                    Modifier.fillMaxWidth().height(84.dp).clip(RoundedCornerShape(18.dp)).background(Color.Black)
+                        .clickable { AppLock.bypass(); pickBanner.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val bm: Any? = if (clearBanner) null else (bannerPhoto ?: prefs.banner.takeIf { it.isNotBlank() }?.let { java.io.File(it) })
+                    if (bm != null) AsyncImage(bm, null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+                    Row(Modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(Icons.Rounded.CameraAlt, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Text("Cover photo", color = Color.White, fontSize = 13.sp)
+                    }
+                }
+                if (bannerPhoto != null || (prefs.banner.isNotBlank() && !clearBanner))
+                    TextButton({ bannerPhoto = null; clearBanner = true }) { Text("Remove cover photo") }
                 OutlinedTextField(name, { name = it.take(30) }, label = { Text("Name") }, singleLine = true)
                 OutlinedTextField(handle, { handle = it.take(24) }, label = { Text("Username") }, prefix = { Text("@") }, singleLine = true)
                 OutlinedTextField(bio, { bio = it.take(120) }, label = { Text("Bio") }, maxLines = 3)
             }
         },
-        confirmButton = { TextButton({ onSave(name, handle, bio, prefs.instagram, photo) }) { Text("Save") } },
+        confirmButton = { TextButton({ onSave(name, handle, bio, prefs.instagram, photo, bannerPhoto, clearBanner) }) { Text("Save") } },
         dismissButton = { TextButton(onDismiss) { Text("Cancel") } },
     )
 }
