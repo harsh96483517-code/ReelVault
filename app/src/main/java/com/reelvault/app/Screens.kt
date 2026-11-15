@@ -240,21 +240,6 @@ fun FavoritesScreen(vm: MainVm, topPad: Dp, bottomPad: Dp, selected: List<String
 }
 
 // ───────────────────────── PROFILE ─────────────────────────
-private fun openInstagram(ctx: android.content.Context, user: String) {
-    val u = user.trim().removePrefix("@")
-    AppLock.bypass()
-    val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse(if (u.isBlank()) "https://instagram.com" else "https://instagram.com/_u/$u"))
-        .setPackage("com.instagram.android").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    try { ctx.startActivity(appIntent) }
-    catch (e: ActivityNotFoundException) {
-        // Instagram app not installed: open the profile in the browser
-        runCatching {
-            ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(if (u.isBlank()) "https://instagram.com" else "https://www.instagram.com/$u/"))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        }
-    }
-}
-
 @Composable
 fun ProfileScreen(vm: MainVm, topPad: Dp, bottomPad: Dp, onVault: () -> Unit, onSettings: () -> Unit) {
     val prefs by vm.prefs.collectAsState()
@@ -280,7 +265,7 @@ fun ProfileScreen(vm: MainVm, topPad: Dp, bottomPad: Dp, onVault: () -> Unit, on
                     .border(1.dp, Color.White.copy(alpha = 0.2f), bannerShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Wordmark(Modifier.height(74.dp).padding(bottom = 6.dp), dark = true)
+                Wordmark(Modifier.height(80.dp).padding(bottom = 6.dp), dark = true)
             }
             Box(Modifier.align(Alignment.BottomCenter).offset(y = 54.dp)) { Avatar(prefs.avatar, prefs.name, 108.dp) }
         }
@@ -295,16 +280,6 @@ fun ProfileScreen(vm: MainVm, topPad: Dp, bottomPad: Dp, onVault: () -> Unit, on
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             GradientButton(if (prefs.name.isBlank()) "Create profile" else "Edit profile", Icons.Rounded.Edit, { editing = true })
-            val ig = prefs.instagram
-            Row(
-                Modifier.bounceClick { if (ig.isBlank()) editing = true else openInstagram(ctx, ig) }.height(48.dp)
-                    .glass(RoundedCornerShape(16.dp)).padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(Icons.Rounded.OpenInNew, null, tint = onSurface, modifier = Modifier.size(18.dp))
-                Text(if (ig.isBlank()) "Add Instagram" else "@$ig", color = onSurface, fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 150.dp))
-            }
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -357,7 +332,6 @@ private fun EditProfileDialog(prefs: Prefs, onDismiss: () -> Unit, onSave: (Stri
     var name by remember { mutableStateOf(prefs.name) }
     var handle by remember { mutableStateOf(prefs.handle) }
     var bio by remember { mutableStateOf(prefs.bio) }
-    var insta by remember { mutableStateOf(prefs.instagram) }
     var photo by remember { mutableStateOf<Uri?>(null) }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { if (it != null) photo = it }
     AlertDialog(
@@ -375,12 +349,10 @@ private fun EditProfileDialog(prefs: Prefs, onDismiss: () -> Unit, onSave: (Stri
                 }
                 OutlinedTextField(name, { name = it.take(30) }, label = { Text("Name") }, singleLine = true)
                 OutlinedTextField(handle, { handle = it.take(24) }, label = { Text("Username") }, prefix = { Text("@") }, singleLine = true)
-                OutlinedTextField(insta, { v -> insta = v.filter { c -> c.isLetterOrDigit() || c == '.' || c == '_' }.take(30) },
-                    label = { Text("Instagram username") }, prefix = { Text("@") }, singleLine = true)
                 OutlinedTextField(bio, { bio = it.take(120) }, label = { Text("Bio") }, maxLines = 3)
             }
         },
-        confirmButton = { TextButton({ onSave(name, handle, bio, insta, photo) }) { Text("Save") } },
+        confirmButton = { TextButton({ onSave(name, handle, bio, prefs.instagram, photo) }) { Text("Save") } },
         dismissButton = { TextButton(onDismiss) { Text("Cancel") } },
     )
 }

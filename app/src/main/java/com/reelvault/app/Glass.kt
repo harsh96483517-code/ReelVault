@@ -184,7 +184,7 @@ fun AppBackground() {
 @Composable
 fun Wordmark(modifier: Modifier = Modifier, dark: Boolean = Mono.dark) {
     Image(
-        painterResource(if (dark) R.drawable.wordmark_dark else R.drawable.wordmark_light), "Reel", modifier,
+        painterResource(if (dark) R.drawable.logo_m_dark else R.drawable.logo_m_light), "Reel", modifier,
         contentScale = ContentScale.Fit, alignment = Alignment.CenterStart,
     )
 }
@@ -238,4 +238,24 @@ fun GradientButton(text: String, icon: ImageVector, onClick: () -> Unit, modifie
 @Composable
 fun GlassCard(modifier: Modifier = Modifier, padding: Dp = 16.dp, content: @Composable ColumnScope.() -> Unit) {
     Column(modifier.fillMaxWidth().glass(RoundedCornerShape(24.dp)).padding(padding), content = content)
+}
+
+/** Liquid-glass popup menu (used over video): frosted dark glass, white text, specular rim. */
+@Composable
+fun GlassMenu(expanded: Boolean, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    val shape = RoundedCornerShape(24.dp)
+    androidx.compose.material3.DropdownMenu(
+        expanded = expanded, onDismissRequest = onDismiss,
+        modifier = Modifier.clip(shape),
+        shape = shape, containerColor = Color.Transparent, tonalElevation = 0.dp, shadowElevation = 0.dp,
+        border = null,
+    ) {
+        CompositionLocalProvider(LocalDark provides true, LocalHaze provides null) {
+            androidx.compose.material3.MaterialTheme(
+                colorScheme = MaterialTheme.colorScheme.copy(onSurface = Color.White, onSurfaceVariant = Color.White.copy(alpha = 0.85f)),
+            ) {
+                Column(Modifier.background(Color(0xCC101014)).glass(shape, strong = true).padding(vertical = 4.dp), content = content)
+            }
+        }
+    }
 }
