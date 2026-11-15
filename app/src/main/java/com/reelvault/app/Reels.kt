@@ -227,6 +227,8 @@ private fun ReelPage(
     var heart by remember { mutableStateOf(false) }
     var speedMenu by remember { mutableStateOf(false) }
     var moreMenu by remember { mutableStateOf(false) }
+    var info by remember { mutableStateOf(false) }
+    var editCaption by remember { mutableStateOf(false) }
     var backdrop by remember { mutableStateOf<Backdrop?>(null) }
     fun openMenu(show: () -> Unit) { captureFrame(st.view) { b -> backdrop = b; show() } }
     val speedItems: @Composable ColumnScope.() -> Unit = {
@@ -260,8 +262,6 @@ private fun ReelPage(
             moreMenu = false; confirmDelete = true
         }, leadingIcon = { Icon(Icons.Rounded.DeleteForever, null) })
     }
-    var info by remember { mutableStateOf(false) }
-    var editCaption by remember { mutableStateOf(false) }
     var seeking by remember { mutableStateOf(false) }
     var seekV by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(heart) { if (heart) { delay(650); heart = false } }

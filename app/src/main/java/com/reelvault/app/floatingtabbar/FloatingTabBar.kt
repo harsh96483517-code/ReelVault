@@ -491,7 +491,7 @@ private fun SharedTransitionScope.InlineTab(
     Box(
         modifier = modifier
             .sharedElement(
-                sharedContentState = rememberSharedContentState("tabGroup"),
+                state = rememberSharedContentState("tabGroup"),
                 animatedVisibilityScope = animatedVisibilityScope,
                 zIndexInOverlay = 1f
             )
@@ -519,7 +519,7 @@ private fun SharedTransitionScope.InlineTab(
             icon = {
                 Box(
                     Modifier.sharedElement(
-                        sharedContentState = rememberSharedContentState("tab#${inlineTab.key}-icon"),
+                        state = rememberSharedContentState("tab#${inlineTab.key}-icon"),
                         animatedVisibilityScope = animatedVisibilityScope,
                         zIndexInOverlay = 1f
                     )
@@ -550,7 +550,7 @@ private fun SharedTransitionScope.InlineStandaloneTab(
         isStandalone = true,
         modifier = modifier
             .sharedElement(
-                sharedContentState = rememberSharedContentState("standaloneTab"),
+                state = rememberSharedContentState("standaloneTab"),
                 animatedVisibilityScope = animatedVisibilityScope,
                 zIndexInOverlay = 1f
             )
@@ -588,7 +588,7 @@ private fun SharedTransitionScope.InlineAccessory(
                 .then(
                     if (isAccessoryShared) {
                         Modifier.sharedElement(
-                            sharedContentState = rememberSharedContentState("accessory"),
+                            state = rememberSharedContentState("accessory"),
                             animatedVisibilityScope = animatedVisibilityScope
                         )
                     } else {
@@ -707,7 +707,7 @@ private fun SharedTransitionScope.ExpandedAccessory(
             .then(
                 if (isAccessoryShared) {
                     Modifier.sharedElement(
-                        sharedContentState = rememberSharedContentState("accessory"),
+                        state = rememberSharedContentState("accessory"),
                         animatedVisibilityScope = animatedVisibilityScope
                     )
                 } else {
@@ -823,7 +823,7 @@ private fun SharedTransitionScope.ExpandedTabs(
     Box(
         modifier = modifier
             .sharedElement(
-                sharedContentState = rememberSharedContentState("tabGroup"),
+                state = rememberSharedContentState("tabGroup"),
                 animatedVisibilityScope = animatedVisibilityScope,
                 zIndexInOverlay = 1f
             )
@@ -924,7 +924,7 @@ private fun SharedTransitionScope.ExpandedTabs(
                                 Box(
                                     modifier = (if (tab.key == inlineTab?.key) {
                                         Modifier.sharedElement(
-                                            sharedContentState = rememberSharedContentState("tab#${tab.key}-icon"),
+                                            state = rememberSharedContentState("tab#${tab.key}-icon"),
                                             animatedVisibilityScope = animatedVisibilityScope,
                                             zIndexInOverlay = 1f
                                         )
@@ -1005,7 +1005,7 @@ private fun SharedTransitionScope.ExpandedStandaloneTab(
         isStandalone = true,
         modifier = modifier
             .sharedElement(
-                sharedContentState = rememberSharedContentState("standaloneTab"),
+                state = rememberSharedContentState("standaloneTab"),
                 animatedVisibilityScope = animatedVisibilityScope,
                 zIndexInOverlay = 1f
             )
