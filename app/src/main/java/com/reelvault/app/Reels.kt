@@ -77,12 +77,19 @@ private class PlayerState(val player: ExoPlayer) {
     var error by mutableStateOf<String?>(null)
     var speed by mutableFloatStateOf(1f)
     var volume by mutableFloatStateOf(1f)
+    var lastVolume by mutableFloatStateOf(1f)
     var loop by mutableStateOf(true)
     var full by mutableStateOf(false)
     var showVol by mutableStateOf(false)
     var fill by mutableStateOf(true)      // fill the screen (zoom) for portrait videos
     var portrait by mutableStateOf(true)
     var onEnded: () -> Unit = {}
+
+    /** Sound on/off for the playing reel, remembering the level to come back to. */
+    fun toggleMute() {
+        if (volume > 0f) { lastVolume = volume; volume = 0f } else { volume = if (lastVolume > 0f) lastVolume else 1f }
+        player.volume = volume
+    }
 
     fun toggle() {
         if (player.isPlaying) { player.pause(); paused = true } else { player.play(); paused = false }
@@ -213,6 +220,12 @@ private fun ReelPage(
     var seekV by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(heart) { if (heart) { delay(650); heart = false } }
 
+    // Back goes one step at a time: close whatever overlay is open before leaving the player.
+    val overlayOpen = moreMenu || speedMenu || info || editCaption
+    BackHandler(enabled = overlayOpen) {
+        moreMenu = false; speedMenu = false; info = false; editCaption = false
+    }
+
     Box(
         Modifier.fillMaxSize().pointerInput(isCur, uri) {
             detectTapGestures(
@@ -281,16 +294,9 @@ private fun ReelPage(
                         }
                     }
                 }
-                GlassIconButton(if (st.volume == 0f) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp, "Volume",
-                    { st.showVol = !st.showVol }, size = 42.dp, tint = Color.White)
-            }
-            if (isCur) AnimatedVisibility(st.showVol, Modifier.align(Alignment.TopEnd).padding(top = 54.dp), enter = fadeIn(), exit = fadeOut()) {
-                Row(Modifier.width(230.dp).glass(RoundedCornerShape(24.dp), true).padding(horizontal = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.VolumeUp, null, tint = Color.White, modifier = Modifier.size(20.dp))
-                    Slider(st.volume, { st.volume = it; st.player.volume = it }, Modifier.weight(1f),
-                        colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(alpha = 0.3f)))
-                }
+                // Sound on/off for the reel's own audio.
+                GlassIconButton(if (st.volume == 0f) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp, "Sound",
+                    { st.toggleMute() }, size = 42.dp, tint = Color.White)
             }
 
             // Bottom block: info + action rail side by side, glass controls underneath (nothing overlaps)
@@ -338,6 +344,9 @@ private fun ReelPage(
                                     st.player.repeatMode = if (st.loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
                                     moreMenu = false
                                 }, leadingIcon = { Icon(Icons.Rounded.Repeat, null) })
+                                DropdownMenuItem({ Text("Hide reel") }, {
+                                    moreMenu = false; vm.hide(listOf(uri)); onBack()
+                                }, leadingIcon = { Icon(Icons.Rounded.VisibilityOff, null) })
                             }
                         }
                     }
