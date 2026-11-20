@@ -201,9 +201,10 @@ fun LogoMark(size: Dp) {
 fun GlassIconButton(
     icon: ImageVector, desc: String, onClick: () -> Unit, modifier: Modifier = Modifier,
     size: Dp = 44.dp, tint: Color = MaterialTheme.colorScheme.onSurface,
+    onLongClick: (() -> Unit)? = null,
 ) {
     Box(
-        modifier.bounceClick(onClick = onClick).size(size).glass(CircleShape),
+        modifier.bounceClick(onLongClick = onLongClick, onClick = onClick).size(size).glass(CircleShape),
         contentAlignment = Alignment.Center,
     ) { Icon(icon, desc, tint = tint, modifier = Modifier.size(size * 0.5f)) }
 }
