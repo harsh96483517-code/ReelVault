@@ -90,6 +90,7 @@ object K {
     val speed = floatPreferencesKey("speed")
     val loop = booleanPreferencesKey("loop")
     val folders = stringSetPreferencesKey("folders")
+    val mutedFolders = stringSetPreferencesKey("muted_folders")
     val name = stringPreferencesKey("profile_name")
     val handle = stringPreferencesKey("profile_handle")
     val bio = stringPreferencesKey("profile_bio")
@@ -111,6 +112,8 @@ data class Prefs(
     val speed: Float = 1f,
     val loop: Boolean = true,
     val folders: Set<String> = emptySet(),
+    /** Folders whose videos stay out of the reels feed (Library still lists them). */
+    val mutedFolders: Set<String> = emptySet(),
     val name: String = "",
     val handle: String = "",
     val bio: String = "",
@@ -130,6 +133,7 @@ class SettingsRepo(private val ctx: Context) {
                 theme = p[K.theme] ?: 0, grid = p[K.grid] ?: true, sort = p[K.sort] ?: 0,
                 auto = p[K.auto] ?: true, remember = p[K.remember] ?: true, last = p[K.last] ?: "",
                 speed = p[K.speed] ?: 1f, loop = p[K.loop] ?: true, folders = p[K.folders] ?: emptySet(),
+                mutedFolders = p[K.mutedFolders] ?: emptySet(),
                 name = p[K.name] ?: "", handle = p[K.handle] ?: "", bio = p[K.bio] ?: "",
                 avatar = p[K.avatar] ?: "",
                 reelsRandom = p[K.reelsRandom] ?: true, autoUpdate = p[K.autoUpdate] ?: true,
