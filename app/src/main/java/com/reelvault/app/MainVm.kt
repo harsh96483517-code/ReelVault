@@ -33,6 +33,14 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     val hidden: StateFlow<List<VideoEntity>> = allRaw.map { l -> l.filter { it.hidden }.sortedByDescending { it.dateAdded } }
         .flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    /**
+     * What the reels feed plays: every visible video except the albums the user switched off in Library.
+     * The Library itself still lists those videos so they can be switched back on.
+     */
+    val feed: StateFlow<List<VideoEntity>> = combine(all, prefs.map { it.mutedFolders }.distinctUntilChanged()) { list, muted ->
+        if (muted.isEmpty()) list else list.filter { it.folder !in muted }
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     val query = MutableStateFlow("")
     val folderFilter = MutableStateFlow<String?>(null)
     val scanning = MutableStateFlow(false)
@@ -122,6 +130,12 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     fun unhide(uris: List<String>) = io { uris.chunked(500).forEach { dao.setHidden(it, false) } }
     fun favoriteMany(uris: List<String>, v: Boolean) = io { uris.chunked(500).forEach { dao.setFavoriteMany(it, v) } }
     fun setLast(uri: String) { setPref { it[K.last] = uri } }
+
+    /** Include / exclude one folder's videos in the reels feed. */
+    fun setFolderMuted(folder: String, muted: Boolean) = setPref {
+        val cur = it[K.mutedFolders] ?: emptySet()
+        it[K.mutedFolders] = if (muted) cur + folder else cur - folder
+    }
 
     fun addFolder(uri: Uri) {
         runCatching {
