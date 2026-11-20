@@ -185,7 +185,14 @@ fun UnlockPanel(title: String, subtitle: String, onSuccess: () -> Unit, onCancel
     var msg by remember { mutableStateOf(subtitle) }
     var error by remember { mutableStateOf(false) }
     val bio = AppLock.fingerprint && canUseBiometric(ctx)
-    LaunchedEffect(Unit) { if (bio && activity != null) promptBiometric(activity, title, onSuccess) }
+    // The fingerprint sheet is opened the moment the lock screen appears, but BiometricPrompt is
+    // dropped silently if the window has not taken focus yet, so wait for it (up to 1.5s) first.
+    LaunchedEffect(bio, activity) {
+        if (!bio || activity == null) return@LaunchedEffect
+        var waited = 0
+        while (!activity.hasWindowFocus() && waited < 1500) { delay(100); waited += 100 }
+        promptBiometric(activity, title, onSuccess)
+    }
     LaunchedEffect(error) { if (error) { delay(900); error = false; msg = subtitle } }
     if (onCancel != null) BackHandler(onBack = onCancel)
 
