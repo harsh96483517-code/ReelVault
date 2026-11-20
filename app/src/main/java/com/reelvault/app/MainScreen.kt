@@ -87,7 +87,8 @@ fun MainScreen(vm: MainVm) {
     var scanned by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(perm) { if (perm && !scanned && prefs.auto) { scanned = true; vm.refresh() } }
 
-    val allVideos by vm.all.collectAsState()
+    // Reels feed skips the albums switched off in Library; the grid still shows everything.
+    val allVideos by vm.feed.collectAsState()
     val update by vm.update.collectAsState()
     val progress by vm.downloadProgress.collectAsState()
     val status by vm.updateStatus.collectAsState()
