@@ -14,6 +14,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.animateDpAsState
@@ -38,8 +39,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import kotlinx.coroutines.delay
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -243,11 +246,45 @@ private fun TopHeader(showSearch: Boolean, searchOn: Boolean, onSearch: () -> Un
 
 @Composable
 private fun BottomBar(selected: Int, onSelect: (Int) -> Unit, onReels: () -> Unit, modifier: Modifier) {
+    // The dock lives folded into the bottom-right corner. Tapping the bubble unfolds it, and it folds
+    // back on its own after a few idle seconds or as soon as a tab is picked.
+    var open by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(open) { if (open) { delay(6000); open = false } }
+
+    Box(
+        modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp).fillMaxWidth(),
+        contentAlignment = Alignment.BottomEnd,
+    ) {
+        AnimatedVisibility(
+            visible = open,
+            enter = fadeIn(tween(160)) + scaleIn(
+                initialScale = 0.32f,
+                animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMediumLow),
+                transformOrigin = TransformOrigin(1f, 1f),
+            ),
+            exit = fadeOut(tween(130)) + scaleOut(
+                targetScale = 0.32f, animationSpec = tween(150), transformOrigin = TransformOrigin(1f, 1f),
+            ),
+        ) {
+            DockRow(selected, { t -> onSelect(t); open = false }, { onReels(); open = false }, Modifier.fillMaxWidth())
+        }
+        if (!open) {
+            Box(
+                Modifier.size(60.dp).bounceClick { open = true }.glass(CircleShape, strong = true),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(tabs[selected].icon, "Open dock", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(26.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun DockRow(selected: Int, onSelect: (Int) -> Unit, onReels: () -> Unit, modifier: Modifier) {
     val dark = LocalDark.current
     val onSurface = MaterialTheme.colorScheme.onSurface
     BoxWithConstraints(
-        modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp).fillMaxWidth().height(68.dp)
-            .glass(RoundedCornerShape(34.dp), strong = true).padding(6.dp),
+        modifier.fillMaxWidth().height(68.dp).glass(RoundedCornerShape(34.dp), strong = true).padding(6.dp),
     ) {
         val slotW = maxWidth / 5
         val slot = if (selected >= 2) selected + 1 else selected   // slot 2 is the Reels button
